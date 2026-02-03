@@ -6,6 +6,8 @@ Kael Stormborn is a character {
     member of the Order of Dawn
     located at the Iron Citadel
     allied with Elara Nightwhisper
+    allied with Thrain Ironhand
+    rival of Vrak the Undying
 
     """
     A weathered knight who has seen too many battles. His armor
@@ -20,6 +22,7 @@ Elara Nightwhisper is a character {
     status alive
     traits [wise, secretive, compassionate]
     located at the Silverpine Forest
+    allied with Sable Riven
 
     """
     An elven scholar who has studied the Sundering for centuries.
@@ -35,10 +38,59 @@ Vrak the Undying is a character {
     traits [cunning, patient, ruthless]
     rival of Kael Stormborn
     rival of the Order of Dawn
+    located at the Ashlands
 
     """
     Once a mortal sorcerer, Vrak survived the Sundering by binding
     his soul to the ash itself. He seeks to finish what the
     Sundering started.
+    """
+}
+
+Thrain Ironhand is a character {
+    species dwarf
+    occupation smith
+    status alive
+    traits [meticulous, gruff, dependable]
+    member of the Silver Compact
+    located at Dawnwatch Keep
+    allied with Kael Stormborn
+
+    """
+    Master artificer of Dawnwatch Keep and the finest weaponsmith
+    in the Iron Kingdoms. He forged the Blade of First Light and
+    maintains the Order's arsenal. His left hand is a mechanical
+    prosthetic of his own design.
+    """
+}
+
+Sable Riven is a character {
+    species human
+    occupation spy
+    status alive
+    traits [perceptive, pragmatic, elusive]
+    member of the Silver Compact
+    located at Dawnwatch Keep
+    allied with Elara Nightwhisper
+    rival of Vrak the Undying
+
+    """
+    An intelligence operative for the Silver Compact who trades
+    in secrets. She maintains informants across the Ashlands and
+    has infiltrated the Ashen Pact more than once.
+    """
+}
+
+Archmage Thandril is a character {
+    species human
+    occupation archmage
+    status dead
+    traits [brilliant, reckless, visionary]
+
+    """
+    The architect of the magical experiment that caused the Great
+    Sundering. His name is spoken as a curse across the continent.
+    Some believe fragments of his consciousness persist in the
+    Undercrypt's whispers.
     """
 }

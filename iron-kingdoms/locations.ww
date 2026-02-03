@@ -2,6 +2,7 @@ the Iron Citadel is a fortress {
     climate arid
     population 45000
     north to the Ashlands
+    south to Dawnwatch Keep
     down to the Undercrypt
 
     """
@@ -13,10 +14,13 @@ the Iron Citadel is a fortress {
 the Ashlands is a region {
     climate arid
     terrain wasteland
+    south to the Iron Citadel
+    west to the Silverpine Forest
 
     """
     A vast expanse of ash and cinder, remnant of the Sundering.
-    Few dare to cross it without a guide.
+    Few dare to cross it without a guide. At the heart lies the
+    Shattered Spire, visible for leagues in every direction.
     """
 }
 
@@ -37,5 +41,29 @@ the Silverpine Forest is a wilderness {
     """
     An ancient woodland where the trees grow with silver bark.
     The elves of Nightwhisper have tended it for millennia.
+    """
+}
+
+Dawnwatch Keep is a town {
+    climate temperate
+    population 8200
+    north to the Iron Citadel
+
+    """
+    A fortified trade town that grew in the shadow of the Iron
+    Citadel. Home to the Silver Compact's headquarters and the
+    largest market on the frontier.
+    """
+}
+
+the Shattered Spire is a landmark {
+    climate arid
+    in the Ashlands
+
+    """
+    The petrified remains of Archmage Thandril's tower, frozen
+    mid-explosion since the Great Sundering. Veins of raw magic
+    still crackle through the stone. The Ashen Pact considers it
+    a holy site.
     """
 }

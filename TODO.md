@@ -57,8 +57,8 @@
 ### Example project
 
 - [x] iron-kingdoms/ — basic example world
-- [ ] Expand with more characters, deeper relationships, complex dates
-- [ ] Add a second example world demonstrating custom entity kinds
+- [x] Expand with more characters, deeper relationships, complex dates
+- [x] Add a second example world demonstrating custom entity kinds (stellar-drift/)
 
 ### ww-server — not started
 

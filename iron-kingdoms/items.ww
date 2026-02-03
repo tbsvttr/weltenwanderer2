@@ -31,3 +31,27 @@ the Codex of Echoes is an item {
     the fragments.
     """
 }
+
+the Heartstone Anvil is an item {
+    type tool
+    rarity rare
+    owned by Thrain Ironhand
+
+    """
+    An anvil carved from a single hearthstone crystal, capable
+    of channeling ambient magic into forged metal. Thrain uses
+    it to craft weapons that can wound creatures of the ash.
+    """
+}
+
+the Veil of Shadows is an item {
+    type cloak
+    rarity uncommon
+    owned by Sable Riven
+
+    """
+    A cloak woven from ashsilk that bends light around the
+    wearer. Sable acquired it from a Pact defector and uses
+    it on her infiltration missions.
+    """
+}

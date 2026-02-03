@@ -1,0 +1,26 @@
+the Freerunner Collective is a faction {
+    type cooperative
+    based at Scrapyard Theta
+    values [freedom, resourcefulness, solidarity]
+
+    """
+    A loose alliance of independent salvage crews who share
+    navigation data and defend each other against Mandate
+    patrols. No formal leadership — disputes are settled by
+    consensus or arm-wrestling.
+    """
+}
+
+the Helios Mandate is a faction {
+    type government
+    led by Director Maren Cole
+    based at the Meridian Hub
+    values [order, expansion, control]
+
+    """
+    The remnant of the original colony administration. They
+    claim authority over all stations in the drift and tax
+    the salvage trade heavily. Their fleet is aging but still
+    the largest armed force in the network.
+    """
+}

@@ -22,3 +22,15 @@ the Ashen Pact is a faction {
     world into something greater.
     """
 }
+
+the Silver Compact is a faction {
+    type guild
+    based at Dawnwatch Keep
+    values [commerce, knowledge, neutrality]
+
+    """
+    A merchants' guild that funds expeditions into the Ashlands
+    and brokers intelligence between the factions. Officially
+    neutral, but their coin flows where it serves their interests.
+    """
+}

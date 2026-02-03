@@ -1,0 +1,14 @@
+-- Custom entity kind: "species"
+
+the Sythari is a species {
+    homeworld "unknown, possibly extragalactic"
+    population_estimate 4500
+    traits [gravitational_sensitivity, long_lived, solitary]
+
+    """
+    A reclusive species with an innate sensitivity to gravitational
+    fields. They arrived in the drift long before humans and seem
+    to understand the Anchor Network intuitively. They rarely
+    gather in groups larger than three.
+    """
+}

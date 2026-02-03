@@ -1,0 +1,36 @@
+-- Custom entity kind: "technology"
+
+the Drift Drive is a technology {
+    origin pre-collapse
+    availability common
+
+    """
+    The standard propulsion system for interstellar travel, using
+    controlled gravitational distortion to ride the drift lanes
+    between stars. Reliable but slow — transit times are measured
+    in weeks.
+    """
+}
+
+the Cascade Compass is a technology {
+    origin sythari
+    availability rare
+
+    """
+    A Sythari-designed instrument that visualizes Cascade field
+    density. Essential for navigating near the Hollows. Human
+    engineers have failed to replicate it despite decades of
+    trying.
+    """
+}
+
+the Anchor Network is a technology {
+    origin unknown
+    availability unique
+
+    """
+    The megastructures scattered throughout the drift that
+    stabilize local spacetime and make habitation possible.
+    No one knows who built them or why some are failing.
+    """
+}

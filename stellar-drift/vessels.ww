@@ -1,0 +1,40 @@
+-- Custom entity kind: "starship"
+-- Any kind not in the built-in list becomes a custom kind.
+
+the Wayward Sun is a starship {
+    class corvette
+    crew 12
+    owned by Captain Rynn Vasik
+
+    """
+    A heavily modified salvage corvette. Fast, tough, and ugly.
+    Its hull is a patchwork of recovered plating from a dozen
+    different manufacturers. The navigation array was rebuilt
+    by Khet and can detect Cascade fluctuations at range.
+    """
+}
+
+the Mandate Cruiser Vigil is a starship {
+    class cruiser
+    crew 380
+    owned by the Helios Mandate
+
+    """
+    Flagship of the Mandate's frontier patrol fleet. Old but
+    well-maintained, armed with pre-Cascade rail batteries.
+    Director Cole uses it as her mobile command center.
+    """
+}
+
+the Ghost of Io is a starship {
+    class freighter
+    crew 0
+    status derelict
+
+    """
+    A colony freighter found drifting at the edge of the Hollows
+    with no crew aboard. Its cargo hold was full of Cascade-warped
+    metal that pulsed with faint bioluminescence. Quarantined at
+    Scrapyard Theta.
+    """
+}

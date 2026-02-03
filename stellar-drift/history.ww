@@ -1,0 +1,74 @@
+the Collapse is an event {
+    date year -312, era "Station Reckoning"
+    type cataclysm
+
+    """
+    The event that severed contact between the colony network and
+    Earth. Whether Earth was destroyed, cut off, or simply stopped
+    responding is unknown. The drift lanes destabilized and dozens
+    of stations were lost.
+    """
+}
+
+the Founding of the Mandate is an event {
+    date year 0, era "Station Reckoning"
+    type political
+    involving [the Helios Mandate, the Meridian Hub]
+
+    """
+    In the chaos after the Collapse, the administrators of Meridian
+    Hub declared emergency authority over the surviving stations.
+    Year zero of Station Reckoning.
+    """
+}
+
+the First Cascade Expansion is an event {
+    date year 84, era "Station Reckoning"
+    type supernatural
+    involving [the Hollows]
+
+    """
+    The Cascade zone doubled in size over a three-day period,
+    swallowing two outlying stations. Survivors described reality
+    folding in on itself before their evacuation ships cleared
+    the boundary.
+    """
+}
+
+the Freerunner Secession is an event {
+    date year 197, era "Station Reckoning"
+    type political
+    involving [the Freerunner Collective, the Helios Mandate]
+
+    """
+    Salvage crews refused to pay the Mandate's new 40% recovery
+    tax and formally organized as the Freerunner Collective.
+    The Mandate lacks the fleet strength to enforce compliance
+    beyond the Meridian Hub's immediate vicinity.
+    """
+}
+
+the Ghost of Io Discovery is an event {
+    date year 301, month 6, day 14, era "Station Reckoning"
+    type discovery
+    involving [Captain Rynn Vasik, the Ghost of Io, the Hollows]
+
+    """
+    Captain Vasik's crew discovered the derelict freighter Ghost
+    of Io at the Hollows boundary. The ship's logs were corrupted
+    but fragments suggest it had been drifting for centuries —
+    longer than the Collapse itself.
+    """
+}
+
+the Anchor Seven Signal is an event {
+    date year 305, month 2, era "Station Reckoning"
+    type discovery
+    involving [Dr Asha Lien, Anchor Point Seven, the Singing Frequency]
+
+    """
+    Dr Lien's research team first isolated the Singing Frequency
+    and traced it to Anchor Point Seven. Her preliminary report
+    to the Mandate was classified immediately.
+    """
+}

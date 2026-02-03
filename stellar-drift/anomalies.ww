@@ -1,0 +1,26 @@
+-- Custom entity kind: "anomaly"
+
+the Cascade is an anomaly {
+    type "spacetime distortion"
+    threat_level critical
+    first_observed "year 0 by station reckoning"
+
+    """
+    A spreading zone of warped spacetime centered on the Hollows.
+    It disrupts navigation, warps matter, and occasionally produces
+    phenomena that defy known physics. It has been growing slowly
+    for as long as anyone can remember.
+    """
+}
+
+the Singing Frequency is an anomaly {
+    type "electromagnetic signal"
+    threat_level unknown
+
+    """
+    A repeating signal detected throughout the Hollows on a
+    frequency that should not propagate through vacuum. Dr Lien
+    believes it originates from Anchor Point Seven. Its pattern
+    has mathematical properties that suggest intentional origin.
+    """
+}

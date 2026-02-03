@@ -1,0 +1,25 @@
+the Prophecy of Second Dawn is a lore {
+    type prophecy
+    source "Undercrypt whispers"
+    references [the Great Sundering, the Shattered Spire]
+
+    """
+    When ash remembers fire and stone recalls the sky,
+    the Spire shall wake and sing the world goodbye.
+    Unless the light is carried down below,
+    to mend what pride and power broke long ago.
+    """
+}
+
+the Chronicle of Ashes is a lore {
+    type history
+    source "Silver Compact archives"
+    references [the Great Sundering, Archmage Thandril, the Founding of the Order]
+
+    """
+    The official historical account of the Sundering and its
+    aftermath, compiled by Compact scholars from survivor
+    testimony. Notably omits any mention of Thandril's earlier
+    warnings about the experiment's instability.
+    """
+}

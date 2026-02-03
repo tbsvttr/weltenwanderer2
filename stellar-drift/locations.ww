@@ -1,0 +1,44 @@
+the Meridian Hub is a city {
+    climate controlled
+    population 240000
+
+    """
+    The largest inhabited station in the drift, built from the
+    fused hulls of a hundred colony ships. A chaotic nexus of
+    trade, politics, and survival.
+    """
+}
+
+the Hollows is a region {
+    climate vacuum
+    terrain "Cascade-saturated space"
+
+    """
+    A vast region of warped spacetime where the Cascade effect
+    is strongest. Ships that enter rarely return intact. Those
+    that do carry stories of impossible geometries and lights
+    that move with purpose.
+    """
+}
+
+Anchor Point Seven is a landmark {
+    climate vacuum
+    in the Hollows
+
+    """
+    A derelict megastructure of unknown origin, suspended at the
+    edge of the Hollows. Its surface is covered in symbols that
+    shift when observed. The Witness has been sighted here.
+    """
+}
+
+Scrapyard Theta is a town {
+    climate controlled
+    population 3100
+
+    """
+    A rough-and-tumble salvage depot where Freerunners trade
+    recovered tech. Built inside a hollowed-out asteroid that
+    was itself salvaged from a drift lane.
+    """
+}

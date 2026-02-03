@@ -1,0 +1,75 @@
+Captain Rynn Vasik is a character {
+    species human
+    occupation captain
+    status alive
+    traits [decisive, haunted, pragmatic]
+    member of the Freerunner Collective
+    located at the Meridian Hub
+    allied with Dr Asha Lien
+
+    """
+    Captain of the salvage vessel Wayward Sun. She lost her
+    previous crew to a Cascade event near the Hollows and
+    refuses to speak of it.
+    """
+}
+
+Dr Asha Lien is a character {
+    species human
+    occupation xenobiologist
+    status alive
+    traits [curious, meticulous, stubborn]
+    located at the Meridian Hub
+    allied with Captain Rynn Vasik
+
+    """
+    A xenobiologist studying the organisms that thrive inside
+    Cascade zones. She believes the Cascade is not a natural
+    phenomenon but a signal from something vast and alien.
+    """
+}
+
+Khet is a character {
+    species sythari
+    occupation navigator
+    status alive
+    traits [calm, perceptive, alien]
+    member of the Freerunner Collective
+    located at the Wayward Sun
+
+    """
+    A Sythari navigator who perceives gravity fields the way
+    humans perceive color. Indispensable for threading the
+    drift lanes between stations.
+    """
+}
+
+Director Maren Cole is a character {
+    species human
+    occupation administrator
+    status alive
+    traits [calculating, disciplined, secretive]
+    member of the Helios Mandate
+    located at the Meridian Hub
+    rival of Captain Rynn Vasik
+
+    """
+    Director of the Helios Mandate's frontier operations. She
+    seeks to control all salvage rights in the drift and views
+    the Freerunner Collective as a threat to order.
+    """
+}
+
+the Witness is a character {
+    species unknown
+    occupation oracle
+    status unknown
+    traits [ancient, cryptic, immense]
+    located at the Hollows
+
+    """
+    An entity of unknown origin that inhabits the deepest
+    Cascade zone. Those who survive an encounter report
+    receiving visions of a galaxy that no longer exists.
+    """
+}

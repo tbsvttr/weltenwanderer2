@@ -1,35 +1,42 @@
-the Small Sundering is an event {
-    date year -1111, month 1, day 0
-    type cataclysm
-}
-
-
 the Great Sundering is an event {
-    date year -1247, month 3, day 15
+    date year -1247, month 3, day 15, era "Age of Wonders"
     type cataclysm
-    involving [Kael Stormborn, the Order of Dawn]
+    involving [Archmage Thandril]
 
     """
-    The day the world broke. A magical experiment gone wrong
-    tore the continent apart, creating the Ashlands and killing
-    millions. The shockwave was felt across every plane.
+    The day the world broke. Archmage Thandril's experiment to
+    pierce the barrier between planes tore the continent apart,
+    creating the Ashlands and killing millions. The shockwave
+    was felt across every plane.
     """
 }
 
 the Founding of the Order is an event {
-    date year -1200
+    date year 1, era "Age of Ash"
     type political
     involving [Kael Stormborn]
 
     """
     In the chaos following the Sundering, Kael Stormborn gathered
     the surviving knights and founded the Order of Dawn to protect
-    the rebuilding settlements.
+    the rebuilding settlements. Year one of the new era.
+    """
+}
+
+the Compact Charter is an event {
+    date year 34, era "Age of Ash"
+    type political
+    involving [the Silver Compact, Dawnwatch Keep]
+
+    """
+    The merchants of Dawnwatch Keep signed a charter establishing
+    the Silver Compact, formalizing the trade routes through the
+    frontier and funding the first expeditions into the Ashlands.
     """
 }
 
 the Battle of Ashfields is an event {
-    date year -800, month 7, day 1
+    date year 447, month 7, day 1, era "Age of Ash"
     type battle
     outcome "pyrrhic victory for the Order"
     involving [Kael Stormborn, the Order of Dawn, Vrak the Undying, the Ashen Pact]
@@ -41,13 +48,38 @@ the Battle of Ashfields is an event {
     """
 }
 
+the Fall of Thrain's Forge is an event {
+    date year 612, month 11, era "Age of Ash"
+    type raid
+    involving [the Ashen Pact, Thrain Ironhand]
+
+    """
+    An Ashen Pact strike force attempted to destroy Thrain's
+    workshop and seize the Heartstone Anvil. Thrain defended the
+    forge alone for three days until the Order arrived.
+    """
+}
+
 the Whispering begins is an event {
-    date year -50
+    date year 1197, era "Age of Ash"
     type supernatural
 
     """
     Strange whispers began emanating from the Undercrypt. Elara
     Nightwhisper was the first to decipher fragments of an
     ancient warning.
+    """
+}
+
+the Infiltration of the Pact is an event {
+    date year 1230, month 5, day 12, era "Age of Ash"
+    type espionage
+    involving [Sable Riven, the Ashen Pact, the Silver Compact]
+
+    """
+    Sable Riven completed her deepest infiltration of the Ashen
+    Pact, uncovering plans to perform a ritual at the Shattered
+    Spire. Her intelligence prompted the current mobilization
+    of the Order.
     """
 }
