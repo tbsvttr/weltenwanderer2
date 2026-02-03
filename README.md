@@ -5,19 +5,16 @@ A creative engine for world building, powered by a custom DSL. Define worlds, ch
 ## Quick Start
 
 ```bash
-# Build the project
 cargo build --release
 
-# Create a new world
 ww init "My World"
 cd "My World"
-
-# Edit world.ww, then:
-ww build          # Compile and check for errors
-ww list            # List all entities
-ww show "Kael" -r  # Show entity with relationships
-ww tui             # Launch interactive explorer
+# edit world.ww, then:
+ww build
+ww tui
 ```
+
+Run `ww --help` for all commands and options.
 
 ## The DSL
 
@@ -122,98 +119,7 @@ Any unrecognized kind becomes a custom type.
 
 ### Multi-File Support
 
-Split large worlds across files however you like:
-
-```
-my-world/
-├── world.ww
-├── locations.ww
-├── characters.ww
-├── factions.ww
-├── history.ww
-├── items.ww
-└── lore.ww
-```
-
-The compiler reads all `.ww` files in a directory. File boundaries don't matter — entities can reference each other across files.
-
-## CLI Commands
-
-```
-ww init <name>                     Create a new world directory with a template
-ww build [-d <dir>]                Compile .ww files, report diagnostics
-ww check [-d <dir>]                Validate without full build output
-ww list [kind] [-t tag] [-d <dir>] List entities, optionally filtered
-ww show <name> [-r] [-d <dir>]     Show entity detail (-r for relationships)
-ww search <query> [-d <dir>]       Full-text search across names and descriptions
-ww graph [-f <entity>] [-d <dir>]  ASCII relationship graph
-ww timeline [--from Y] [--to Y]    Chronological event display
-ww export <format> [-o path]       Export to json, markdown, or html
-ww new <kind> <name> [-f file]     Generate a DSL stub and append to file
-ww tui [-d <dir>]                  Launch interactive TUI explorer
-ww lsp                             Start the Language Server Protocol server
-```
-
-All commands default to the current directory for `-d`.
-
-## TUI
-
-`ww tui` launches an interactive terminal explorer with three views:
-
-| Key | Action |
-|---|---|
-| `j` / `k` or arrows | Navigate / scroll |
-| `g` / `G` | Jump to top / bottom |
-| `Enter` | Select entity or event |
-| `Esc` | Go back |
-| `/` | Search (filter by name) |
-| `Tab` | Cycle views |
-| `1` / `2` / `3` | Switch to Entities / Graph / Timeline |
-| `?` | Toggle help |
-| `q` | Quit |
-
-## LSP
-
-The `ww-lsp` binary provides IDE integration via the Language Server Protocol:
-
-- Diagnostics (errors and warnings on save)
-- Go-to-definition for entity references
-- Autocomplete for entity names and keywords
-- Hover to see entity kind
-
-Point your editor's LSP client at `ww-lsp` for `.ww` files.
-
-### VS Code Extension
-
-A VS Code extension is included in `editors/vscode/`. It provides:
-
-- Syntax highlighting for `.ww` files (TextMate grammar)
-- Automatic LSP client integration (launches `ww-lsp`)
-- Configurable LSP binary path (`weltenwanderer.lspPath` setting)
-
-To use it, build the extension and install it, or open the workspace with the extension loaded from the `editors/vscode/` directory.
-
-## Example Project
-
-The `iron-kingdoms/` directory contains a complete example world split across multiple `.ww` files:
-
-```
-iron-kingdoms/
-├── world.ww         World metadata
-├── locations.ww     Locations and spatial connections
-├── characters.ww    Characters and their attributes
-├── factions.ww      Factions and memberships
-├── items.ww         Items and ownership
-└── history.ww       Historical events and timeline
-```
-
-Try it out:
-
-```bash
-ww build -d iron-kingdoms
-ww list -d iron-kingdoms
-ww tui -d iron-kingdoms
-```
+The compiler reads all `.ww` files in a directory. File boundaries don't matter — entities can reference each other across files. See `iron-kingdoms/` for an example world split across multiple files.
 
 ## Building
 
@@ -221,52 +127,20 @@ Requires Rust 1.85+ (edition 2024).
 
 ```bash
 cargo build --release
-
-# Binaries:
-#   target/release/ww       — CLI + TUI
-#   target/release/ww-lsp   — Language server
+# Binaries: target/release/ww, target/release/ww-lsp
 ```
+
+A VS Code extension for syntax highlighting and LSP integration is in `editors/vscode/`.
 
 ## Development
 
-After cloning, run setup once to install git hooks and tooling:
-
 ```bash
-make setup
+make setup    # install git hooks + cargo-deny (run once)
+make check    # run all quality checks
+make fix      # auto-fix formatting + clippy suggestions
 ```
 
-This configures a pre-commit hook that enforces all quality checks before every commit:
-
-| Check | Command | What it catches |
-|---|---|---|
-| Formatting | `cargo fmt --check` | Style violations |
-| Linting | `cargo clippy -- -D warnings` | Bugs, anti-patterns, complexity |
-| Tests | `cargo test --workspace` | Regressions |
-| Documentation | `cargo doc` (warnings = errors) | Broken doc references |
-| Dependencies | `cargo deny check` | License issues, vulnerabilities |
-
-Run all checks manually at any time:
-
-```bash
-make check      # run everything
-make fmt        # formatting only
-make lint       # clippy only
-make test       # tests only
-make fix        # auto-fix formatting + clippy suggestions
-```
-
-## Project Structure
-
-```
-crates/
-├── ww-core/         Core types: Entity, World, Relationship, Query, Timeline
-├── ww-dsl/          DSL lexer (logos), parser (chumsky), compiler, diagnostics (ariadne)
-├── ww-cli/          CLI commands + ratatui TUI
-└── ww-lsp/          tower-lsp language server
-editors/
-└── vscode/          VS Code extension (syntax highlighting + LSP client)
-iron-kingdoms/       Example world project
-```
+A pre-commit hook enforces formatting, clippy, tests, documentation, and dependency auditing on every commit. See the [Makefile](Makefile) for all targets.
 
 ## License
 
