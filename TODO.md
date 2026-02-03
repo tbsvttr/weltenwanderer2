@@ -50,9 +50,9 @@
 ### VS Code extension
 
 - [x] Syntax highlighting, LSP client integration
-- [ ] Snippet support (entity templates)
-- [ ] Bracket matching configuration for `{ }` and `[ ]`
-- [ ] Custom commands in command palette
+- [x] Snippet support (entity templates)
+- [x] Bracket matching configuration for `{ }` and `[ ]`
+- [x] Custom commands in command palette
 
 ### Example project
 

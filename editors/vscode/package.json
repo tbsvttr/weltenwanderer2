@@ -10,9 +10,7 @@
   "categories": [
     "Programming Languages"
   ],
-  "activationEvents": [
-    "onLanguage:ww"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
@@ -33,6 +31,30 @@
         "language": "ww",
         "scopeName": "source.ww",
         "path": "./syntaxes/ww.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "ww",
+        "path": "./snippets/ww.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "weltenwanderer.restartServer",
+        "title": "Weltenwanderer: Restart Language Server"
+      },
+      {
+        "command": "weltenwanderer.showOutput",
+        "title": "Weltenwanderer: Show Output Channel"
+      },
+      {
+        "command": "weltenwanderer.newWorld",
+        "title": "Weltenwanderer: New World File"
+      },
+      {
+        "command": "weltenwanderer.newEntity",
+        "title": "Weltenwanderer: Insert Entity Template"
       }
     ],
     "configuration": {

@@ -1,0 +1,208 @@
+{
+  "World Declaration": {
+    "prefix": "world",
+    "body": [
+      "world \"${1:World Name}\" {",
+      "    genre \"${2:fantasy}\"",
+      "    setting \"${3:A world of wonder and danger}\"",
+      "}"
+    ],
+    "description": "Create a new world declaration"
+  },
+  "Character Entity": {
+    "prefix": "character",
+    "body": [
+      "${1:Name} is a character {",
+      "    species ${2:human}",
+      "    occupation ${3:adventurer}",
+      "    status ${4|alive,dead,missing,unknown|}",
+      "    traits [${5:brave, loyal}]",
+      "",
+      "    \"\"\"",
+      "    ${6:Description of the character.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new character entity"
+  },
+  "Location — Fortress": {
+    "prefix": "fortress",
+    "body": [
+      "the ${1:Name} is a fortress {",
+      "    climate ${2:temperate}",
+      "    population ${3:5000}",
+      "",
+      "    \"\"\"",
+      "    ${4:Description of the fortress.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new fortress location"
+  },
+  "Location — Region": {
+    "prefix": "region",
+    "body": [
+      "the ${1:Name} is a region {",
+      "    climate ${2:temperate}",
+      "    terrain ${3:plains}",
+      "",
+      "    \"\"\"",
+      "    ${4:Description of the region.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new region location"
+  },
+  "Location — City": {
+    "prefix": "city",
+    "body": [
+      "the ${1:Name} is a city {",
+      "    climate ${2:temperate}",
+      "    population ${3:10000}",
+      "",
+      "    \"\"\"",
+      "    ${4:Description of the city.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new city location"
+  },
+  "Location — Dungeon": {
+    "prefix": "dungeon",
+    "body": [
+      "the ${1:Name} is a dungeon {",
+      "    in ${2:Parent Location}",
+      "",
+      "    \"\"\"",
+      "    ${3:Description of the dungeon.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new dungeon location"
+  },
+  "Faction": {
+    "prefix": "faction",
+    "body": [
+      "the ${1:Name} is a faction {",
+      "    type ${2:organization}",
+      "    led by ${3:Leader Name}",
+      "    based at ${4:Location}",
+      "    values [${5:honor, duty}]",
+      "",
+      "    \"\"\"",
+      "    ${6:Description of the faction.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new faction entity"
+  },
+  "Item": {
+    "prefix": "item",
+    "body": [
+      "the ${1:Name} is an item {",
+      "    type ${2|weapon,armor,artifact,tool,potion,scroll|}",
+      "    rarity ${3|common,uncommon,rare,legendary|}",
+      "    owned by ${4:Owner Name}",
+      "",
+      "    \"\"\"",
+      "    ${5:Description of the item.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new item entity"
+  },
+  "Event": {
+    "prefix": "event",
+    "body": [
+      "the ${1:Name} is an event {",
+      "    date year ${2:1}, era \"${3:Common Era}\"",
+      "    type ${4:historical}",
+      "    involving [${5:Participant}]",
+      "",
+      "    \"\"\"",
+      "    ${6:Description of the event.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new event entity"
+  },
+  "Lore": {
+    "prefix": "lore",
+    "body": [
+      "the ${1:Name} is a lore {",
+      "    type ${2|prophecy,history,legend,myth,scripture|}",
+      "    source \"${3:Unknown}\"",
+      "    references [${4:Related Entity}]",
+      "",
+      "    \"\"\"",
+      "    ${5:The lore content.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a new lore entity"
+  },
+  "Entity (Generic)": {
+    "prefix": "entity",
+    "body": [
+      "${1:Name} is a ${2:kind} {",
+      "    ${3:property} ${4:value}",
+      "",
+      "    \"\"\"",
+      "    ${5:Description.}",
+      "    \"\"\"",
+      "}"
+    ],
+    "description": "Create a generic entity declaration"
+  },
+  "Description Block": {
+    "prefix": "desc",
+    "body": [
+      "\"\"\"",
+      "${1:Description text.}",
+      "\"\"\""
+    ],
+    "description": "Insert a doc string / description block"
+  },
+  "Relationship — Member Of": {
+    "prefix": "member of",
+    "body": [
+      "member of ${1:Group Name}"
+    ],
+    "description": "Add a 'member of' relationship"
+  },
+  "Relationship — Located At": {
+    "prefix": "located at",
+    "body": [
+      "located at ${1:Location Name}"
+    ],
+    "description": "Add a 'located at' relationship"
+  },
+  "Relationship — Allied With": {
+    "prefix": "allied with",
+    "body": [
+      "allied with ${1:Entity Name}"
+    ],
+    "description": "Add an 'allied with' relationship"
+  },
+  "Relationship — Rival Of": {
+    "prefix": "rival of",
+    "body": [
+      "rival of ${1:Entity Name}"
+    ],
+    "description": "Add a 'rival of' relationship"
+  },
+  "Exit": {
+    "prefix": "exit",
+    "body": [
+      "${1|north,south,east,west,up,down|} to ${2:Destination}"
+    ],
+    "description": "Add a directional exit to another location"
+  },
+  "Date": {
+    "prefix": "date",
+    "body": [
+      "date year ${1:1}, era \"${2:Common Era}\""
+    ],
+    "description": "Add a date literal"
+  }
+}
