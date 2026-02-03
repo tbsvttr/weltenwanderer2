@@ -122,10 +122,7 @@ fn export_markdown(world: &World) -> String {
                     } else {
                         rel.source
                     };
-                    let other_name = world
-                        .get_entity(other_id)
-                        .map(|e| e.name.as_str())
-                        .unwrap_or("???");
+                    let other_name = world.entity_name(other_id);
                     let phrase = rel.kind.as_phrase();
                     out.push_str(&format!("- {phrase} {other_name}\n"));
                 }

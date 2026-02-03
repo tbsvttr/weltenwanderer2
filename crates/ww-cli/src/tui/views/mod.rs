@@ -41,9 +41,8 @@ pub fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::EntityDetail => {
                 let name = app
                     .detail_entity_id
-                    .and_then(|id| app.world.get_entity(id))
-                    .map(|e| e.name.as_str())
-                    .unwrap_or("???");
+                    .map(|id| app.world.entity_name(id))
+                    .unwrap_or("<unknown>");
                 format!("{name} | j/k:scroll Esc:back ?:help q:quit")
             }
             ActiveView::Graph => {

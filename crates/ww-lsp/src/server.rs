@@ -77,8 +77,13 @@ impl WwLanguageServer {
         let mut concatenated = String::new();
 
         for path in &file_paths {
-            let uri = Url::from_file_path(path)
-                .unwrap_or_else(|_| Url::parse(&format!("file://{}", path.display())).unwrap());
+            let uri = match Url::from_file_path(path) {
+                Ok(u) => u,
+                Err(()) => match Url::parse(&format!("file://{}", path.display())) {
+                    Ok(u) => u,
+                    Err(_) => continue,
+                },
+            };
 
             let text = if let Some(open_text) = open_docs.get(&uri) {
                 open_text.clone()

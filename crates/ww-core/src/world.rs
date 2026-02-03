@@ -92,6 +92,14 @@ impl World {
         self.entities.get(&id)
     }
 
+    /// Get an entity's name by ID, returning `"<unknown>"` if not found.
+    pub fn entity_name(&self, id: EntityId) -> &str {
+        self.entities
+            .get(&id)
+            .map(|e| e.name.as_str())
+            .unwrap_or("<unknown>")
+    }
+
     /// Get a mutable reference to an entity by ID.
     pub fn get_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> {
         self.entities.get_mut(&id)

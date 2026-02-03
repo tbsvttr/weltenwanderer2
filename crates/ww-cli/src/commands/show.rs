@@ -129,10 +129,7 @@ pub fn run(dir: &Path, name: &str, show_relationships: bool) -> Result<(), Strin
                 } else {
                     rel.source
                 };
-                let other_name = world
-                    .get_entity(other_id)
-                    .map(|e| e.name.as_str())
-                    .unwrap_or("???");
+                let other_name = world.entity_name(other_id);
 
                 let phrase = if rel.source == entity.id {
                     // Outgoing: "self <phrase> target"

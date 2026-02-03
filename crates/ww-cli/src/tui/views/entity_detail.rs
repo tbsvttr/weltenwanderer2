@@ -169,11 +169,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             } else {
                 rel.source
             };
-            let other_name = app
-                .world
-                .get_entity(other_id)
-                .map(|e| e.name.as_str())
-                .unwrap_or("???");
+            let other_name = app.world.entity_name(other_id);
 
             let phrase = rel.kind.as_phrase();
             let label = if let Some(ref l) = rel.label {

@@ -23,16 +23,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             continue;
         }
 
-        let source_name = app
-            .world
-            .get_entity(rel.source)
-            .map(|e| e.name.as_str())
-            .unwrap_or("???");
-        let target_name = app
-            .world
-            .get_entity(rel.target)
-            .map(|e| e.name.as_str())
-            .unwrap_or("???");
+        let source_name = app.world.entity_name(rel.source);
+        let target_name = app.world.entity_name(rel.target);
 
         let arrow = if rel.bidirectional {
             " <--> "

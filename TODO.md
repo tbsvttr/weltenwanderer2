@@ -44,8 +44,8 @@
 - [ ] Code Actions (quick fixes for diagnostics)
 - [ ] Context-aware completion (currently hardcoded keyword list)
 - [ ] Incremental compilation (currently recompiles full workspace on every change)
-- [ ] Audit `.unwrap()` in server.rs:81 (can panic on malformed URL)
-- [ ] Replace `unwrap_or("???")` patterns with proper error propagation
+- [x] Audit `.unwrap()` in server.rs:81 (can panic on malformed URL)
+- [x] Replace `unwrap_or("???")` patterns with proper error propagation
 
 ### VS Code extension
 

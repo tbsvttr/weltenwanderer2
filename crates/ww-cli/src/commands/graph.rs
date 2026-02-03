@@ -25,10 +25,7 @@ pub fn run(dir: &Path, focus: Option<&str>) -> Result<(), String> {
 }
 
 fn render_focused_graph(world: &World, center: EntityId) {
-    let center_name = world
-        .get_entity(center)
-        .map(|e| e.name.as_str())
-        .unwrap_or("???");
+    let center_name = world.entity_name(center);
 
     let rels = world.relationships_of(center);
 
@@ -65,10 +62,7 @@ fn render_focused_graph(world: &World, center: EntityId) {
             continue; // Skip duplicate edges to the same entity
         }
 
-        let other_name = world
-            .get_entity(other_id)
-            .map(|e| e.name.as_str())
-            .unwrap_or("???");
+        let other_name = world.entity_name(other_id);
 
         println!("    {direction} {phrase} --> [{other_name}]");
     }
@@ -90,14 +84,8 @@ fn render_full_graph(world: &World) {
             continue;
         }
 
-        let source_name = world
-            .get_entity(rel.source)
-            .map(|e| e.name.as_str())
-            .unwrap_or("???");
-        let target_name = world
-            .get_entity(rel.target)
-            .map(|e| e.name.as_str())
-            .unwrap_or("???");
+        let source_name = world.entity_name(rel.source);
+        let target_name = world.entity_name(rel.target);
 
         let arrow = if rel.bidirectional { "<-->" } else { " -->" };
         let label = if let Some(ref l) = rel.label {
