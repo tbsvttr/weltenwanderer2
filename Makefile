@@ -1,4 +1,4 @@
-.PHONY: setup check fmt lint test doc deny fix clean
+.PHONY: setup check fmt lint test doc deny readme readme-check fix clean
 
 ## Setup — run once after cloning
 setup:
@@ -8,7 +8,7 @@ setup:
 	@echo "Setup complete."
 
 ## Run all checks (same as pre-commit hook)
-check: fmt lint test doc deny
+check: fmt lint test doc deny readme-check
 	@echo "All checks passed."
 
 ## Formatting
@@ -30,6 +30,14 @@ doc:
 ## Dependency audit
 deny:
 	cargo deny check
+
+## Generate README.md from code + template
+readme:
+	./scripts/generate-readme.sh
+
+## Verify README.md is up to date
+readme-check: readme
+	@git diff --quiet README.md || { echo "error: README.md is out of date. Run 'make readme' and commit the result."; exit 1; }
 
 ## Auto-fix formatting and lint suggestions
 fix:

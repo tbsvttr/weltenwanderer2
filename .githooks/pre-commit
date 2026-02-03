@@ -22,4 +22,12 @@ else
     echo "--- cargo deny: skipped (not installed, run 'make setup')"
 fi
 
+echo "--- README.md freshness check"
+./scripts/generate-readme.sh
+git diff --quiet README.md || {
+    echo "error: README.md is out of date."
+    echo "Run 'make readme' and stage the result before committing."
+    exit 1
+}
+
 echo "==> pre-commit: all checks passed."

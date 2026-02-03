@@ -1,3 +1,4 @@
+<!-- Generated file — do not edit. Edit doc/README.tmpl.md or crate doc comments instead. -->
 # Weltenwanderer
 
 A creative engine for world building, powered by a custom DSL. Define worlds, characters, factions, locations, events, items, and lore in plain-text `.ww` files — then compile, query, explore, and export them.
@@ -18,7 +19,10 @@ Run `ww --help` for all commands and options.
 
 ## The DSL
 
-`.ww` files are the source of truth. They're human-readable, git-friendly, and designed to feel natural while remaining strictly parseable.
+DSL lexer, parser, and compiler for Weltenwanderer world files.
+
+`.ww` files are the source of truth. They're human-readable, git-friendly,
+and designed to feel natural while remaining strictly parseable.
 
 ### Entity Declarations
 
@@ -113,13 +117,17 @@ the Prophecy of Renewal is lore {
 
 Built-in: `location`, `character`, `faction`, `event`, `item`, `lore`
 
-Location subtypes (compiled as `location` with a subtype): `fortress`, `city`, `town`, `village`, `region`, `continent`, `room`, `wilderness`, `dungeon`, `building`, `landmark`, `plane`
+Location subtypes (compiled as `location` with a subtype): `fortress`, `city`,
+`town`, `village`, `region`, `continent`, `room`, `wilderness`, `dungeon`,
+`building`, `landmark`, `plane`
 
 Any unrecognized kind becomes a custom type.
 
 ### Multi-File Support
 
-The compiler reads all `.ww` files in a directory. File boundaries don't matter — entities can reference each other across files. See `iron-kingdoms/` for an example world split across multiple files.
+The compiler reads all `.ww` files in a directory. File boundaries don't
+matter — entities can reference each other across files. See `iron-kingdoms/`
+for an example world split across multiple files.
 
 ## Building
 
