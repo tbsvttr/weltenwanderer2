@@ -1,0 +1,44 @@
+Kael Stormborn is a character {
+    species human
+    occupation knight
+    status alive
+    traits [brave, stubborn, loyal]
+    member of the Order of Dawn
+    located at the Iron Citadel
+    allied with Elara Nightwhisper
+
+    """
+    A weathered knight who has seen too many battles. His armor
+    bears the silver flame of the Order. He speaks little of his
+    past, but his sword speaks volumes.
+    """
+}
+
+Elara Nightwhisper is a character {
+    species elf
+    occupation mage
+    status alive
+    traits [wise, secretive, compassionate]
+    located at the Silverpine Forest
+
+    """
+    An elven scholar who has studied the Sundering for centuries.
+    She believes the key to preventing another cataclysm lies
+    buried in the Undercrypt.
+    """
+}
+
+Vrak the Undying is a character {
+    species undead
+    occupation necromancer
+    status alive
+    traits [cunning, patient, ruthless]
+    rival of Kael Stormborn
+    rival of the Order of Dawn
+
+    """
+    Once a mortal sorcerer, Vrak survived the Sundering by binding
+    his soul to the ash itself. He seeks to finish what the
+    Sundering started.
+    """
+}

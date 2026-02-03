@@ -1,0 +1,53 @@
+the Small Sundering is an event {
+    date year -1111, month 1, day 0
+    type cataclysm
+}
+
+
+the Great Sundering is an event {
+    date year -1247, month 3, day 15
+    type cataclysm
+    involving [Kael Stormborn, the Order of Dawn]
+
+    """
+    The day the world broke. A magical experiment gone wrong
+    tore the continent apart, creating the Ashlands and killing
+    millions. The shockwave was felt across every plane.
+    """
+}
+
+the Founding of the Order is an event {
+    date year -1200
+    type political
+    involving [Kael Stormborn]
+
+    """
+    In the chaos following the Sundering, Kael Stormborn gathered
+    the surviving knights and founded the Order of Dawn to protect
+    the rebuilding settlements.
+    """
+}
+
+the Battle of Ashfields is an event {
+    date year -800, month 7, day 1
+    type battle
+    outcome "pyrrhic victory for the Order"
+    involving [Kael Stormborn, the Order of Dawn, Vrak the Undying, the Ashen Pact]
+
+    """
+    The first open confrontation between the Order and the Ashen
+    Pact. The Order prevailed, but at terrible cost. Vrak escaped
+    into the deep Ashlands.
+    """
+}
+
+the Whispering begins is an event {
+    date year -50
+    type supernatural
+
+    """
+    Strange whispers began emanating from the Undercrypt. Elara
+    Nightwhisper was the first to decipher fragments of an
+    ancient warning.
+    """
+}

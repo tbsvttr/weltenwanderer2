@@ -1,0 +1,24 @@
+the Order of Dawn is a faction {
+    type military_order
+    led by Kael Stormborn
+    based at the Iron Citadel
+    values [honor, duty, sacrifice]
+
+    """
+    A military order defending the frontier settlements against
+    the horrors that crawl from the Ashlands. Founded in the
+    aftermath of the Sundering.
+    """
+}
+
+the Ashen Pact is a faction {
+    type cult
+    led by Vrak the Undying
+    values [power, transformation, rebirth]
+
+    """
+    A secretive cult that worships the destructive power of the
+    Sundering. They believe a second cataclysm will remake the
+    world into something greater.
+    """
+}

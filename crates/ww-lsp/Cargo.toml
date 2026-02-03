@@ -1,0 +1,17 @@
+[package]
+name = "ww-lsp"
+description = "Language Server Protocol implementation for Weltenwanderer DSL"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ww-lsp"
+path = "src/main.rs"
+
+[dependencies]
+ww-core = { workspace = true }
+ww-dsl = { workspace = true }
+tower-lsp = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,699 @@
+use std::collections::HashMap;
+
+use ww_core::component::*;
+use ww_core::entity::{Entity, EntityId, EntityKind, MetadataValue};
+use ww_core::relationship::{Relationship, RelationshipKind};
+use ww_core::world::{World, WorldMeta};
+
+use crate::ast::*;
+use crate::diagnostics::{Diagnostic, Severity};
+
+/// Result of compiling DSL source into a World.
+pub struct CompileResult {
+    pub world: World,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl CompileResult {
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
+    }
+}
+
+/// Compile a parsed AST into a ww-core World.
+///
+/// The compilation happens in two passes:
+/// 1. **Entity pass**: create all entities (so names are known)
+/// 2. **Relationship pass**: resolve name references and create relationships
+pub fn compile(ast: &SourceFile) -> CompileResult {
+    let mut compiler = Compiler::new();
+    compiler.compile(ast);
+    CompileResult {
+        world: compiler.world,
+        diagnostics: compiler.diagnostics,
+    }
+}
+
+struct Compiler {
+    world: World,
+    diagnostics: Vec<Diagnostic>,
+    /// Map from entity name (lowercased) to the EntityId, for name resolution.
+    name_to_id: HashMap<String, EntityId>,
+}
+
+impl Compiler {
+    fn new() -> Self {
+        Self {
+            world: World::new(WorldMeta::new("Untitled")),
+            diagnostics: Vec::new(),
+            name_to_id: HashMap::new(),
+        }
+    }
+
+    fn compile(&mut self, ast: &SourceFile) {
+        // Pass 1: process world metadata and create entities
+        for decl in &ast.declarations {
+            match &decl.node {
+                Declaration::World(w) => self.compile_world_meta(w),
+                Declaration::Entity(e) => self.compile_entity_pass1(e),
+            }
+        }
+
+        // Pass 2: process relationships and exits (name references are now resolvable)
+        for decl in &ast.declarations {
+            if let Declaration::Entity(e) = &decl.node {
+                self.compile_entity_pass2(e);
+            }
+        }
+    }
+
+    // -- Pass 1: World metadata and entity creation --
+
+    fn compile_world_meta(&mut self, decl: &WorldDecl) {
+        self.world.meta.name = decl.name.node.clone();
+
+        for stmt in &decl.body {
+            if let Statement::Property(prop) = &stmt.node {
+                match prop.key.as_str() {
+                    "genre" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            self.world.meta.genre = Some(s);
+                        }
+                    }
+                    "setting" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            self.world.meta.setting = Some(s);
+                        }
+                    }
+                    "description" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            self.world.meta.description = s;
+                        }
+                    }
+                    other => {
+                        let mv = self.value_to_metadata(&prop.value);
+                        self.world
+                            .meta
+                            .properties
+                            .insert(other.to_string(), mv);
+                    }
+                }
+            }
+        }
+    }
+
+    fn compile_entity_pass1(&mut self, decl: &EntityDecl) {
+        let (kind, location_subtype) = EntityKind::parse(&decl.kind.node.to_lowercase());
+        let mut entity = Entity::new(kind, &decl.name.node);
+
+        // Set location subtype if applicable
+        if let Some(subtype) = location_subtype {
+            entity.components.location = Some(LocationComponent {
+                location_type: subtype,
+                ..Default::default()
+            });
+        }
+
+        // Process properties, component fields, descriptions, and dates
+        for stmt in &decl.body {
+            match &stmt.node {
+                Statement::Property(prop) => {
+                    self.apply_property(&mut entity, prop, &stmt.span);
+                }
+                Statement::Description(text) => {
+                    entity.description = text.clone();
+                }
+                Statement::Date(date) => {
+                    self.apply_date(&mut entity, date);
+                }
+                // Relationships handled in pass 2
+                Statement::Relationship(_) | Statement::Exit(_) => {}
+            }
+        }
+
+        let name_lower = entity.name.to_lowercase();
+        let id = entity.id;
+
+        match self.world.add_entity(entity) {
+            Ok(_) => {
+                self.name_to_id.insert(name_lower, id);
+            }
+            Err(e) => {
+                self.diagnostics.push(Diagnostic::error(
+                    decl.name.span.clone(),
+                    e.to_string(),
+                ));
+            }
+        }
+    }
+
+    // -- Pass 2: Relationships and exits --
+
+    fn compile_entity_pass2(&mut self, decl: &EntityDecl) {
+        let source_id = match self.resolve_name(&decl.name.node, &decl.name.span) {
+            Some(id) => id,
+            None => return,
+        };
+
+        for stmt in &decl.body {
+            match &stmt.node {
+                Statement::Relationship(rel) => {
+                    self.compile_relationship(source_id, rel);
+                }
+                Statement::Exit(exit) => {
+                    self.compile_exit(source_id, exit);
+                }
+                _ => {} // Already handled in pass 1
+            }
+        }
+    }
+
+    fn compile_relationship(&mut self, source_id: EntityId, rel: &RelationshipStmt) {
+        let kind = match rel.keyword {
+            RelationshipKeyword::In => RelationshipKind::ContainedIn,
+            RelationshipKeyword::MemberOf => RelationshipKind::MemberOf,
+            RelationshipKeyword::LocatedAt => RelationshipKind::LocatedAt,
+            RelationshipKeyword::AlliedWith => RelationshipKind::AlliedWith,
+            RelationshipKeyword::RivalOf => RelationshipKind::RivalOf,
+            RelationshipKeyword::OwnedBy => RelationshipKind::OwnedBy,
+            RelationshipKeyword::LedBy => RelationshipKind::LeaderOf,
+            RelationshipKeyword::BasedAt => RelationshipKind::BasedAt,
+            RelationshipKeyword::Involving => RelationshipKind::ParticipatedIn,
+            RelationshipKeyword::References => RelationshipKind::References,
+            RelationshipKeyword::CausedBy => RelationshipKind::CausedBy,
+        };
+
+        for target in &rel.targets {
+            let target_id = match self.resolve_name(&target.node, &target.span) {
+                Some(id) => id,
+                None => continue,
+            };
+
+            // Handle inverted relationships:
+            // "led by X" means X leads self, so X is source
+            // "owned by X" means X owns self, so X is source
+            // "involving [X, Y]" means X/Y participated in self
+            let (src, tgt) = match rel.keyword {
+                RelationshipKeyword::LedBy | RelationshipKeyword::OwnedBy => {
+                    (target_id, source_id)
+                }
+                RelationshipKeyword::Involving => (target_id, source_id),
+                _ => (source_id, target_id),
+            };
+
+            let relationship = Relationship::new(src, kind.clone(), tgt);
+            if let Err(e) = self.world.add_relationship(relationship) {
+                self.diagnostics.push(Diagnostic::error(
+                    target.span.clone(),
+                    format!("failed to add relationship: {e}"),
+                ));
+            }
+        }
+    }
+
+    fn compile_exit(&mut self, source_id: EntityId, exit: &ExitStmt) {
+        let target_id = match self.resolve_name(&exit.target.node, &exit.target.span) {
+            Some(id) => id,
+            None => return,
+        };
+
+        let relationship = Relationship::new(source_id, RelationshipKind::ConnectedTo, target_id)
+            .with_label(&exit.direction);
+
+        if let Err(e) = self.world.add_relationship(relationship) {
+            self.diagnostics.push(Diagnostic::error(
+                exit.target.span.clone(),
+                format!("failed to add exit: {e}"),
+            ));
+        }
+    }
+
+    // -- Property application --
+
+    fn apply_property(&mut self, entity: &mut Entity, prop: &Property, span: &crate::ast::Span) {
+        // Try to apply as a component field first
+        if self.apply_component_property(entity, prop) {
+            return;
+        }
+
+        // Otherwise store as a generic property
+        let key = prop.key.clone();
+        let mv = self.value_to_metadata(&prop.value);
+        entity.properties.insert(key, mv);
+
+        let _ = span; // span available for future diagnostics
+    }
+
+    /// Try to apply a property as a typed component field. Returns true if handled.
+    fn apply_component_property(&mut self, entity: &mut Entity, prop: &Property) -> bool {
+        match prop.key.as_str() {
+            // Character fields
+            "species" => {
+                let comp = entity.components.character.get_or_insert_with(Default::default);
+                comp.species = self.value_as_string(&prop.value);
+                true
+            }
+            "occupation" => {
+                let comp = entity.components.character.get_or_insert_with(Default::default);
+                comp.occupation = self.value_as_string(&prop.value);
+                true
+            }
+            "status" => {
+                let comp = entity.components.character.get_or_insert_with(Default::default);
+                if let Some(s) = self.value_as_string(&prop.value) {
+                    comp.status = match s.to_lowercase().as_str() {
+                        "alive" => CharacterStatus::Alive,
+                        "dead" => CharacterStatus::Dead,
+                        "unknown" => CharacterStatus::Unknown,
+                        _ => CharacterStatus::Custom(s),
+                    };
+                }
+                true
+            }
+            "traits" => {
+                let comp = entity.components.character.get_or_insert_with(Default::default);
+                if let Value::List(items) = &prop.value {
+                    comp.traits = items
+                        .iter()
+                        .filter_map(|v| self.value_as_string(&v.node))
+                        .collect();
+                }
+                true
+            }
+
+            // Location fields
+            "climate" => {
+                let comp = entity.components.location.get_or_insert_with(Default::default);
+                comp.climate = self.value_as_string(&prop.value);
+                true
+            }
+            "terrain" => {
+                let comp = entity.components.location.get_or_insert_with(Default::default);
+                comp.terrain = self.value_as_string(&prop.value);
+                true
+            }
+            "population" => {
+                let comp = entity.components.location.get_or_insert_with(Default::default);
+                if let Value::Integer(n) = &prop.value {
+                    comp.population = Some(*n as u64);
+                }
+                true
+            }
+
+            // Faction fields
+            "alignment" => {
+                let comp = entity.components.faction.get_or_insert_with(Default::default);
+                comp.alignment = self.value_as_string(&prop.value);
+                true
+            }
+            "values" => {
+                let comp = entity.components.faction.get_or_insert_with(Default::default);
+                if let Value::List(items) = &prop.value {
+                    comp.values = items
+                        .iter()
+                        .filter_map(|v| self.value_as_string(&v.node))
+                        .collect();
+                }
+                true
+            }
+
+            // Event fields
+            "outcome" => {
+                let comp = entity.components.event.get_or_insert_with(Default::default);
+                comp.outcome = self.value_as_string(&prop.value);
+                true
+            }
+            "duration" => {
+                let comp = entity.components.event.get_or_insert_with(Default::default);
+                comp.duration = self.value_as_string(&prop.value);
+                true
+            }
+
+            // Item fields
+            "rarity" => {
+                let comp = entity.components.item.get_or_insert_with(Default::default);
+                comp.rarity = self.value_as_string(&prop.value);
+                true
+            }
+
+            // Lore fields
+            "source" => {
+                let comp = entity.components.lore.get_or_insert_with(Default::default);
+                comp.source = self.value_as_string(&prop.value);
+                true
+            }
+            "reliability" => {
+                let comp = entity.components.lore.get_or_insert_with(Default::default);
+                comp.reliability = self.value_as_string(&prop.value);
+                true
+            }
+
+            // "type" is polymorphic — applies to the relevant component
+            "type" => {
+                if let Some(s) = self.value_as_string(&prop.value) {
+                    // Apply to whichever component exists, or store as generic
+                    if let Some(comp) = &mut entity.components.event {
+                        comp.event_type = Some(s);
+                    } else if let Some(comp) = &mut entity.components.faction {
+                        comp.faction_type = Some(s);
+                    } else if let Some(comp) = &mut entity.components.item {
+                        comp.item_type = Some(s);
+                    } else if let Some(comp) = &mut entity.components.lore {
+                        comp.lore_type = Some(s);
+                    } else {
+                        // Store as generic property
+                        return false;
+                    }
+                }
+                true
+            }
+
+            _ => false,
+        }
+    }
+
+    fn apply_date(&mut self, entity: &mut Entity, date: &DateLiteral) {
+        let comp = entity.components.event.get_or_insert_with(Default::default);
+        let mut wd = WorldDate::new(date.year.unwrap_or(0));
+        wd.month = date.month;
+        wd.day = date.day;
+        wd.era = date.era.clone();
+        comp.date = Some(wd);
+    }
+
+    // -- Name resolution --
+
+    fn resolve_name(&mut self, name: &str, span: &crate::ast::Span) -> Option<EntityId> {
+        let lower = name.to_lowercase();
+        if let Some(&id) = self.name_to_id.get(&lower) {
+            Some(id)
+        } else {
+            self.diagnostics.push(
+                Diagnostic::error(span.clone(), format!("undefined entity: \"{name}\""))
+                    .with_label("not defined in any .ww file"),
+            );
+            None
+        }
+    }
+
+    // -- Value conversion helpers --
+
+    fn value_as_string(&self, value: &Value) -> Option<String> {
+        match value {
+            Value::String(s) => Some(s.clone()),
+            Value::Identifier(s) => Some(s.clone()),
+            Value::Integer(n) => Some(n.to_string()),
+            Value::Float(n) => Some(n.to_string()),
+            Value::Boolean(b) => Some(b.to_string()),
+            Value::List(_) => None,
+        }
+    }
+
+    fn value_to_metadata(&self, value: &Value) -> MetadataValue {
+        match value {
+            Value::String(s) => MetadataValue::String(s.clone()),
+            Value::Identifier(s) => MetadataValue::String(s.clone()),
+            Value::Integer(n) => MetadataValue::Integer(*n),
+            Value::Float(n) => MetadataValue::Float(*n),
+            Value::Boolean(b) => MetadataValue::Boolean(*b),
+            Value::List(items) => MetadataValue::List(
+                items
+                    .iter()
+                    .map(|v| self.value_to_metadata(&v.node))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer;
+    use crate::parser;
+
+    fn compile_source(source: &str) -> CompileResult {
+        let (tokens, lex_errors) = lexer::lex(source);
+        assert!(lex_errors.is_empty(), "lex errors: {lex_errors:?}");
+        let ast = parser::parse(&tokens).expect("parse error");
+        compile(&ast)
+    }
+
+    #[test]
+    fn compile_world_metadata() {
+        let result = compile_source(
+            r#"world "The Iron Kingdoms" {
+    genre "high fantasy"
+    setting "A shattered continent"
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+        assert_eq!(result.world.meta.name, "The Iron Kingdoms");
+        assert_eq!(result.world.meta.genre.as_deref(), Some("high fantasy"));
+    }
+
+    #[test]
+    fn compile_character_entity() {
+        let result = compile_source(
+            r#"Kael Stormborn is a character {
+    species human
+    occupation knight
+    status alive
+    traits [brave, stubborn, loyal]
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael Stormborn").unwrap();
+        assert_eq!(entity.kind, EntityKind::Character);
+
+        let char_comp = entity.components.character.as_ref().unwrap();
+        assert_eq!(char_comp.species.as_deref(), Some("human"));
+        assert_eq!(char_comp.occupation.as_deref(), Some("knight"));
+        assert_eq!(char_comp.status, CharacterStatus::Alive);
+        assert_eq!(char_comp.traits, vec!["brave", "stubborn", "loyal"]);
+    }
+
+    #[test]
+    fn compile_location_with_subtype() {
+        let result = compile_source(
+            r#"the Iron Citadel is a fortress {
+    climate arid
+    population 45000
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("the Iron Citadel").unwrap();
+        assert_eq!(entity.kind, EntityKind::Location);
+        assert_eq!(entity.location_subtype(), Some("fortress"));
+
+        let loc = entity.components.location.as_ref().unwrap();
+        assert_eq!(loc.climate.as_deref(), Some("arid"));
+        assert_eq!(loc.population, Some(45000));
+    }
+
+    #[test]
+    fn compile_relationships() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+}
+
+the Order of Dawn is a faction {
+    type military_order
+}
+
+Kael is a character {
+    member of the Order of Dawn
+}"#,
+        );
+        // This should error because "Kael" is defined twice
+        assert!(result.has_errors());
+    }
+
+    #[test]
+    fn compile_relationships_no_duplicate() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+}
+
+the Order of Dawn is a faction {
+    type military_order
+}
+
+the Iron Citadel is a fortress {
+    population 45000
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+        assert_eq!(result.world.entity_count(), 3);
+    }
+
+    #[test]
+    fn compile_member_of_relationship() {
+        let result = compile_source(
+            r#"Kael is a character {
+    member of the Order of Dawn
+}
+
+the Order of Dawn is a faction {
+    type military_order
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let kael_id = result.world.find_id_by_name("Kael").unwrap();
+        let rels = result.world.relationships_from(kael_id);
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].kind, RelationshipKind::MemberOf);
+    }
+
+    #[test]
+    fn compile_exit() {
+        let result = compile_source(
+            r#"the Citadel is a fortress {
+    north to the Ashlands
+}
+
+the Ashlands is a region {
+    climate arid
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let citadel_id = result.world.find_id_by_name("the Citadel").unwrap();
+        let rels = result.world.relationships_from(citadel_id);
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].kind, RelationshipKind::ConnectedTo);
+        assert_eq!(rels[0].label.as_deref(), Some("north"));
+    }
+
+    #[test]
+    fn compile_event_with_date() {
+        let result = compile_source(
+            r#"the Great Sundering is an event {
+    date year -1247, month 3, day 15
+    type cataclysm
+
+    """
+    The day the world broke.
+    """
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("the Great Sundering").unwrap();
+        let event = entity.components.event.as_ref().unwrap();
+        assert_eq!(event.date.as_ref().unwrap().year, -1247);
+        assert_eq!(event.event_type.as_deref(), Some("cataclysm"));
+        assert!(entity.description.contains("world broke"));
+    }
+
+    #[test]
+    fn compile_undefined_reference_produces_error() {
+        let result = compile_source(
+            r#"Kael is a character {
+    member of the Nonexistent Order
+}"#,
+        );
+        assert!(result.has_errors());
+        assert!(result.diagnostics[0]
+            .message
+            .contains("undefined entity"));
+    }
+
+    #[test]
+    fn compile_involving_relationship() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+}
+
+the Order is a faction {
+    type military
+}
+
+the Battle is an event {
+    involving [Kael, the Order]
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let battle_id = result.world.find_id_by_name("the Battle").unwrap();
+        // "involving" creates relationships FROM each participant TO the event
+        let rels = result.world.relationships_to(battle_id);
+        assert_eq!(rels.len(), 2);
+    }
+
+    #[test]
+    fn compile_full_world() {
+        let result = compile_source(
+            r#"world "The Iron Kingdoms" {
+    genre "high fantasy"
+    setting "A shattered continent rebuilding after the Sundering"
+}
+
+the Iron Citadel is a fortress {
+    climate arid
+    population 45000
+    north to the Ashlands
+
+    """
+    An ancient fortress carved from a single mountain of iron ore.
+    """
+}
+
+the Ashlands is a region {
+    climate arid
+    terrain wasteland
+}
+
+Kael Stormborn is a character {
+    species human
+    occupation knight
+    status alive
+    traits [brave, stubborn, loyal]
+    member of the Order of Dawn
+    located at the Iron Citadel
+    allied with Elara Nightwhisper
+}
+
+Elara Nightwhisper is a character {
+    species elf
+    occupation mage
+    status alive
+}
+
+the Order of Dawn is a faction {
+    type military_order
+    led by Kael Stormborn
+    based at the Iron Citadel
+    values [honor, duty, sacrifice]
+}
+
+the Great Sundering is an event {
+    date year -1247, month 3, day 15
+    type cataclysm
+    involving [Kael Stormborn, the Order of Dawn]
+
+    """
+    The day the world broke.
+    """
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        assert_eq!(result.world.meta.name, "The Iron Kingdoms");
+        assert_eq!(result.world.entity_count(), 6);
+        assert!(result.world.relationship_count() > 0);
+
+        // Verify specific relationships
+        let kael_id = result.world.find_id_by_name("Kael Stormborn").unwrap();
+        let kael_rels = result.world.relationships_from(kael_id);
+        assert!(kael_rels.len() >= 3); // member of, located at, allied with
+    }
+}

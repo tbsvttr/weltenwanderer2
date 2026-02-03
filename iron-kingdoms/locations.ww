@@ -1,0 +1,41 @@
+the Iron Citadel is a fortress {
+    climate arid
+    population 45000
+    north to the Ashlands
+    down to the Undercrypt
+
+    """
+    An ancient fortress carved from a single mountain of iron ore.
+    Its walls have never been breached in three thousand years.
+    """
+}
+
+the Ashlands is a region {
+    climate arid
+    terrain wasteland
+
+    """
+    A vast expanse of ash and cinder, remnant of the Sundering.
+    Few dare to cross it without a guide.
+    """
+}
+
+the Undercrypt is a dungeon {
+    in the Iron Citadel
+
+    """
+    A labyrinth of tunnels beneath the Citadel, older than
+    the fortress itself. Strange whispers echo from the deep.
+    """
+}
+
+the Silverpine Forest is a wilderness {
+    climate temperate
+    terrain forest
+    east to the Ashlands
+
+    """
+    An ancient woodland where the trees grow with silver bark.
+    The elves of Nightwhisper have tended it for millennia.
+    """
+}

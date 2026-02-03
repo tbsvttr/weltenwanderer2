@@ -1,0 +1,33 @@
+the Blade of First Light is an item {
+    type weapon
+    rarity legendary
+    owned by Kael Stormborn
+
+    """
+    A longsword forged from the first rays of dawn after the
+    Sundering. It burns with pale fire when undead are near.
+    """
+}
+
+the Ashen Crown is an item {
+    type artifact
+    rarity legendary
+    owned by Vrak the Undying
+
+    """
+    A crown of fused ash and bone, said to grant dominion over
+    the dead. It pulses with a sickly grey light.
+    """
+}
+
+the Codex of Echoes is an item {
+    type tome
+    rarity rare
+    owned by Elara Nightwhisper
+
+    """
+    A collection of translated whispers from the Undercrypt.
+    Elara has spent decades compiling and cross-referencing
+    the fragments.
+    """
+}

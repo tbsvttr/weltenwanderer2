@@ -1,0 +1,16 @@
+[package]
+name = "ww-dsl"
+description = "DSL lexer, parser, and compiler for Weltenwanderer world files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ww-core = { workspace = true }
+logos = { workspace = true }
+chumsky = { workspace = true }
+ariadne = { workspace = true }
+miette = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
