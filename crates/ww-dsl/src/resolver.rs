@@ -102,6 +102,9 @@ pub struct Resolver {
     names: HashMap<String, ResolvedEntity>,
     /// Diagnostics produced during resolution (e.g., duplicate names).
     pub diagnostics: Vec<Diagnostic>,
+    /// Maps child entity name (lowercase) → parent entity name (lowercase)
+    /// when the child's kind matches a known entity name (inheritance).
+    pub inheritance: HashMap<String, String>,
 }
 
 impl Resolver {
@@ -157,7 +160,24 @@ impl Resolver {
             }
         }
 
-        Self { names, diagnostics }
+        // Detect inheritance: if an entity's kind matches a known entity name,
+        // record it as an inheritance relationship.
+        let mut inheritance = HashMap::new();
+        for decl in &ast.declarations {
+            if let Declaration::Entity(entity_decl) = &decl.node {
+                let kind_lower = entity_decl.kind.node.to_lowercase();
+                if names.contains_key(&kind_lower) {
+                    let name_lower = entity_decl.name.node.to_lowercase();
+                    inheritance.insert(name_lower, kind_lower);
+                }
+            }
+        }
+
+        Self {
+            names,
+            diagnostics,
+            inheritance,
+        }
     }
 
     /// Look up an entity by name. Returns the pre-assigned EntityId.
@@ -199,6 +219,11 @@ impl Resolver {
     /// Whether no entities were resolved.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
+    }
+
+    /// Check if a name is a known entity.
+    pub fn is_entity(&self, name: &str) -> bool {
+        self.names.contains_key(&name.to_lowercase())
     }
 }
 

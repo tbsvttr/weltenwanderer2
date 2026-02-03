@@ -45,6 +45,7 @@ struct Compiler<'a> {
     diagnostics: Vec<Diagnostic>,
     resolver: &'a Resolver,
     source_map: &'a SourceMap,
+    ast: Option<&'a SourceFile>,
 }
 
 impl<'a> Compiler<'a> {
@@ -54,10 +55,13 @@ impl<'a> Compiler<'a> {
             diagnostics: Vec::new(),
             resolver,
             source_map,
+            ast: None,
         }
     }
 
-    fn compile(&mut self, ast: &SourceFile) {
+    fn compile(&mut self, ast: &'a SourceFile) {
+        self.ast = Some(ast);
+
         // Pass 1: process world metadata and create entities
         for decl in &ast.declarations {
             match &decl.node {
@@ -80,8 +84,8 @@ impl<'a> Compiler<'a> {
         self.world.meta.name = decl.name.node.clone();
 
         for stmt in &decl.body {
-            if let Statement::Property(prop) = &stmt.node {
-                match prop.key.as_str() {
+            match &stmt.node {
+                Statement::Property(prop) => match prop.key.as_str() {
                     "genre" => {
                         if let Some(s) = self.value_as_string(&prop.value) {
                             self.world.meta.genre = Some(s);
@@ -101,7 +105,17 @@ impl<'a> Compiler<'a> {
                         let mv = self.value_to_metadata(&prop.value);
                         self.world.meta.properties.insert(other.to_string(), mv);
                     }
+                },
+                Statement::Block(block) => {
+                    for inner in &block.body {
+                        if let Statement::Property(prop) = &inner.node {
+                            let key = format!("{}.{}", block.name, prop.key);
+                            let mv = self.value_to_metadata(&prop.value);
+                            self.world.meta.properties.insert(key, mv);
+                        }
+                    }
                 }
+                _ => {}
             }
         }
     }
@@ -113,7 +127,10 @@ impl<'a> Compiler<'a> {
             None => return,
         };
 
-        let (kind, location_subtype) = EntityKind::parse(&decl.kind.node.to_lowercase());
+        let name_lower = decl.name.node.to_lowercase();
+
+        // Resolve entity kind — may traverse inheritance chain
+        let (kind, location_subtype) = self.resolve_entity_kind(&name_lower, &decl.kind.node);
         let mut entity = Entity::with_id(resolved.id, kind, &decl.name.node);
 
         // Set location subtype if applicable
@@ -122,6 +139,11 @@ impl<'a> Compiler<'a> {
                 location_type: subtype,
                 ..Default::default()
             });
+        }
+
+        // If inheriting, apply parent properties first as defaults
+        if let Some(parent_lower) = self.resolver.inheritance.get(&name_lower).cloned() {
+            self.apply_inherited_properties(&mut entity, &parent_lower, &mut Vec::new());
         }
 
         // Process properties, component fields, descriptions, and dates
@@ -135,6 +157,9 @@ impl<'a> Compiler<'a> {
                 }
                 Statement::Date(date) => {
                     self.apply_date(&mut entity, date);
+                }
+                Statement::Block(block) => {
+                    self.apply_block_properties(&mut entity, &block.name, &block.body);
                 }
                 // Relationships handled in pass 2
                 Statement::Relationship(_) | Statement::Exit(_) => {}
@@ -155,6 +180,15 @@ impl<'a> Compiler<'a> {
             None => return,
         };
 
+        // Process inline annotations as relationships
+        for ann in &decl.annotations {
+            let rel = RelationshipStmt {
+                keyword: ann.node.keyword.clone(),
+                targets: ann.node.targets.clone(),
+            };
+            self.compile_relationship(source_id, &rel);
+        }
+
         for stmt in &decl.body {
             match &stmt.node {
                 Statement::Relationship(rel) => {
@@ -163,7 +197,8 @@ impl<'a> Compiler<'a> {
                 Statement::Exit(exit) => {
                     self.compile_exit(source_id, exit);
                 }
-                _ => {} // Already handled in pass 1
+                Statement::Block(_) => {} // Blocks contain only properties, handled in pass 1
+                _ => {}                   // Already handled in pass 1
             }
         }
     }
@@ -223,6 +258,145 @@ impl<'a> Compiler<'a> {
                 exit.target.span.clone(),
                 format!("failed to add exit: {e}"),
             ));
+        }
+    }
+
+    // -- Inheritance --
+
+    /// Resolve the actual EntityKind for an entity, walking the inheritance chain.
+    fn resolve_entity_kind(
+        &self,
+        name_lower: &str,
+        kind_str: &str,
+    ) -> (EntityKind, Option<String>) {
+        let kind_lower = kind_str.to_lowercase();
+
+        // If the kind is not an entity name, parse it directly
+        if !self.resolver.inheritance.contains_key(name_lower) {
+            return EntityKind::parse(&kind_lower);
+        }
+
+        // Walk the inheritance chain to find the root kind
+        let mut current = kind_lower;
+        let mut visited = vec![name_lower.to_string()];
+        loop {
+            if visited.contains(&current) {
+                // Cycle detected
+                return (EntityKind::Custom(kind_str.to_string()), None);
+            }
+            visited.push(current.clone());
+
+            // Check if this level has a parent too
+            if let Some(parent) = self.resolver.inheritance.get(&current) {
+                current = parent.clone();
+            } else {
+                // `current` is the root — parse its kind from its declaration
+                if let Some(ast) = self.ast {
+                    for decl in &ast.declarations {
+                        if let Declaration::Entity(e) = &decl.node
+                            && e.name.node.to_lowercase() == current
+                        {
+                            return EntityKind::parse(&e.kind.node.to_lowercase());
+                        }
+                    }
+                }
+                // Fallback: treat current as the kind string
+                return EntityKind::parse(&current);
+            }
+        }
+    }
+
+    /// Apply inherited properties from a parent entity's declaration.
+    fn apply_inherited_properties(
+        &mut self,
+        entity: &mut Entity,
+        parent_lower: &str,
+        visited: &mut Vec<String>,
+    ) {
+        if visited.contains(&parent_lower.to_string()) {
+            // Cycle detected
+            self.diagnostics.push(Diagnostic::error(
+                0..0,
+                format!("inheritance cycle detected involving \"{parent_lower}\""),
+            ));
+            return;
+        }
+        visited.push(parent_lower.to_string());
+
+        // If parent also inherits, apply grandparent first
+        if let Some(grandparent) = self.resolver.inheritance.get(parent_lower).cloned() {
+            self.apply_inherited_properties(entity, &grandparent, visited);
+        }
+
+        // Find parent declaration in AST and apply its properties
+        let Some(ast) = self.ast else { return };
+        for decl in &ast.declarations {
+            if let Declaration::Entity(parent_decl) = &decl.node
+                && parent_decl.name.node.to_lowercase() == parent_lower
+            {
+                for stmt in &parent_decl.body {
+                    match &stmt.node {
+                        Statement::Property(prop) => {
+                            self.apply_property(entity, prop, &stmt.span);
+                        }
+                        Statement::Description(text) => {
+                            if entity.description.is_empty() {
+                                entity.description = text.clone();
+                            }
+                        }
+                        Statement::Date(date) => {
+                            self.apply_date(entity, date);
+                        }
+                        Statement::Block(block) => {
+                            self.apply_block_properties(entity, &block.name, &block.body);
+                        }
+                        // Don't inherit relationships or exits
+                        Statement::Relationship(_) | Statement::Exit(_) => {}
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // -- Block property flattening --
+
+    fn apply_block_properties(
+        &mut self,
+        entity: &mut Entity,
+        prefix: &str,
+        body: &[Spanned<Statement>],
+    ) {
+        for stmt in body {
+            match &stmt.node {
+                Statement::Property(prop) => {
+                    let key = format!("{prefix}.{}", prop.key);
+                    let mv = self.value_to_metadata(&prop.value);
+                    entity.properties.insert(key, mv);
+                }
+                Statement::Block(inner) => {
+                    let nested_prefix = format!("{prefix}.{}", inner.name);
+                    self.apply_block_properties(entity, &nested_prefix, &inner.body);
+                }
+                Statement::Description(text) => {
+                    let key = format!("{prefix}.description");
+                    entity
+                        .properties
+                        .insert(key, MetadataValue::String(text.clone()));
+                }
+                Statement::Relationship(_) | Statement::Exit(_) => {
+                    self.diagnostics.push(Diagnostic::warning(
+                        stmt.span.clone(),
+                        format!("relationships and exits are not allowed inside '{prefix}' block"),
+                    ));
+                }
+                Statement::Date(_) => {
+                    self.diagnostics.push(Diagnostic::warning(
+                        stmt.span.clone(),
+                        format!("dates are not allowed inside '{prefix}' block"),
+                    ));
+                }
+            }
         }
     }
 

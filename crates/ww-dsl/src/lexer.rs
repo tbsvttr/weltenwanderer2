@@ -12,6 +12,8 @@ pub enum Token {
     RBrace,
     LBracket,
     RBracket,
+    LParen,
+    RParen,
     Comma,
     Newline,
     DocString(String),
@@ -28,6 +30,8 @@ impl fmt::Display for Token {
             Token::RBrace => write!(f, "}}"),
             Token::LBracket => write!(f, "["),
             Token::RBracket => write!(f, "]"),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
             Token::Comma => write!(f, ","),
             Token::Newline => write!(f, "newline"),
             Token::DocString(_) => write!(f, "doc string"),
@@ -56,6 +60,12 @@ enum RawToken {
 
     #[token("]")]
     RBracket,
+
+    #[token("(")]
+    LParen,
+
+    #[token(")")]
+    RParen,
 
     #[token(",")]
     Comma,
@@ -104,6 +114,8 @@ pub fn lex(source: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<LexError>
                     RawToken::RBrace => Token::RBrace,
                     RawToken::LBracket => Token::LBracket,
                     RawToken::RBracket => Token::RBracket,
+                    RawToken::LParen => Token::LParen,
+                    RawToken::RParen => Token::RParen,
                     RawToken::Comma => Token::Comma,
                     RawToken::Newline => Token::Newline,
                     RawToken::DocStringStart => {

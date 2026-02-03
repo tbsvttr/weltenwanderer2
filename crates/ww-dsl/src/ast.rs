@@ -29,6 +29,8 @@ pub struct WorldDecl {
 #[derive(Debug, Clone)]
 pub struct EntityDecl {
     pub name: Spanned<String>,
+    /// Inline relationship annotations, e.g. `Kael (leader of the Order) is a ...`.
+    pub annotations: Vec<Spanned<InlineAnnotation>>,
     pub kind: Spanned<String>,
     pub body: Vec<Spanned<Statement>>,
 }
@@ -40,6 +42,7 @@ pub enum Statement {
     Exit(ExitStmt),
     Description(String),
     Date(DateLiteral),
+    Block(BlockStmt),
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +86,22 @@ pub enum RelationshipKeyword {
 pub struct ExitStmt {
     pub direction: String,
     pub target: Spanned<String>,
+}
+
+/// A named block grouping properties under a namespace prefix.
+#[derive(Debug, Clone)]
+pub struct BlockStmt {
+    pub name: String,
+    pub body: Vec<Spanned<Statement>>,
+}
+
+/// An inline relationship annotation on an entity declaration.
+///
+/// E.g. `Kael (leader of the Order) is a character { ... }`.
+#[derive(Debug, Clone)]
+pub struct InlineAnnotation {
+    pub keyword: RelationshipKeyword,
+    pub targets: Vec<Spanned<String>>,
 }
 
 #[derive(Debug, Clone, Default)]

@@ -10,11 +10,11 @@
 ### ww-dsl
 
 - [x] Lexer, parser, compiler, diagnostics
-- [ ] Nested blocks (sub-entities or grouped properties)
-- [ ] Entity inheritance / traits (extend an existing entity kind)
-- [ ] Inline relationships (e.g. `Kael (leader of the Order)`)
+- [x] Nested blocks (sub-entities or grouped properties)
+- [x] Entity inheritance / traits (extend an existing entity kind)
+- [x] Inline relationships (e.g. `Kael (leader of the Order)`)
 - [x] Implement resolver (cross-file name resolution)
-- [ ] Malformed input recovery tests
+- [x] Malformed input recovery tests (`parse_lenient` API)
 
 ### ww-cli
 

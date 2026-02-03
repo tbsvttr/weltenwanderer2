@@ -162,29 +162,12 @@ impl WwLanguageServer {
             .map(|e| ww_dsl::Diagnostic::error(e.span, e.message))
             .collect();
 
-        let ast = match parser::parse(&tokens) {
-            Ok(ast) => ast,
-            Err(parse_errors) => {
-                diagnostics.extend(
-                    parse_errors
-                        .into_iter()
-                        .map(|e| ww_dsl::Diagnostic::error(e.span, e.message)),
-                );
-                let per_file_diags = map_diagnostics_to_files(&slices, &diagnostics);
-                for (uri, diags) in per_file_diags {
-                    self.client.publish_diagnostics(uri, diags, None).await;
-                }
-                // Store partial state (no AST) so other features degrade gracefully
-                let mut state = self.state.write().await;
-                state.slices = slices;
-                state.concatenated_source = concatenated;
-                state.source_map = Some(dsl_source_map);
-                state.tokens = Some(tokens);
-                state.ast = None;
-                state.last_source_hash = source_hash;
-                return;
-            }
-        };
+        let (ast, parse_errors) = parser::parse_lenient(&tokens);
+        diagnostics.extend(
+            parse_errors
+                .into_iter()
+                .map(|e| ww_dsl::Diagnostic::error(e.span, e.message)),
+        );
 
         let resolver = Resolver::resolve(&ast, &dsl_source_map);
         let mut result = compiler::compile(&ast, &resolver, dsl_source_map);
@@ -403,36 +386,56 @@ fn find_all_entity_references(ast: &SourceFile, name: &str) -> Vec<(std::ops::Ra
     let mut refs = Vec::new();
 
     for decl in &ast.declarations {
-        let body = match &decl.node {
+        match &decl.node {
             Declaration::Entity(entity) => {
                 if entity.name.node.to_lowercase() == name_lower {
                     refs.push((entity.name.span.clone(), true));
                 }
-                &entity.body
-            }
-            Declaration::World(world) => &world.body,
-        };
-
-        for stmt in body {
-            match &stmt.node {
-                Statement::Relationship(rel) => {
-                    for target in &rel.targets {
+                // Walk inline annotations for target references
+                for ann in &entity.annotations {
+                    for target in &ann.node.targets {
                         if target.node.to_lowercase() == name_lower {
                             refs.push((target.span.clone(), false));
                         }
                     }
                 }
-                Statement::Exit(exit) => {
-                    if exit.target.node.to_lowercase() == name_lower {
-                        refs.push((exit.target.span.clone(), false));
-                    }
-                }
-                _ => {}
+                collect_refs_in_body(&entity.body, &name_lower, &mut refs);
+            }
+            Declaration::World(world) => {
+                collect_refs_in_body(&world.body, &name_lower, &mut refs);
             }
         }
     }
 
     refs
+}
+
+/// Recursively collect entity name references from a statement body (handles nested blocks).
+fn collect_refs_in_body(
+    body: &[ww_dsl::ast::Spanned<Statement>],
+    name_lower: &str,
+    refs: &mut Vec<(std::ops::Range<usize>, bool)>,
+) {
+    for stmt in body {
+        match &stmt.node {
+            Statement::Relationship(rel) => {
+                for target in &rel.targets {
+                    if target.node.to_lowercase() == name_lower {
+                        refs.push((target.span.clone(), false));
+                    }
+                }
+            }
+            Statement::Exit(exit) => {
+                if exit.target.node.to_lowercase() == name_lower {
+                    refs.push((exit.target.span.clone(), false));
+                }
+            }
+            Statement::Block(block) => {
+                collect_refs_in_body(&block.body, name_lower, refs);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Convert a global byte span to an LSP Location using file slices.
@@ -547,9 +550,13 @@ fn classify_token(token: &Token, next: Option<&Token>) -> Option<u32> {
         Token::Str(_) => Some(3),                            // STRING
         Token::Integer(_) | Token::Float(_) => Some(4),      // NUMBER
         Token::DocString(_) => Some(5),                      // COMMENT
-        Token::LBrace | Token::RBrace | Token::LBracket | Token::RBracket | Token::Comma => {
-            Some(6) // OPERATOR
-        }
+        Token::LBrace
+        | Token::RBrace
+        | Token::LBracket
+        | Token::RBracket
+        | Token::LParen
+        | Token::RParen
+        | Token::Comma => Some(6), // OPERATOR
         _ => None,
     }
 }
@@ -577,6 +584,8 @@ fn is_semantic_keyword(word: &str) -> bool {
             | "references"
             | "caused"
             | "in"
+            | "leader"
+            | "owner"
             | "north"
             | "south"
             | "east"
