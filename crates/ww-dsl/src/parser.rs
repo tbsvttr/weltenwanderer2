@@ -192,11 +192,28 @@ where
         .map(|(direction, target)| Statement::Exit(ExitStmt { direction, target }))
         .labelled("exit");
 
-    // Date: "date year -1247, month 3, day 15"
+    // Date: "date year -1247, month 3, day 15, era "Third Age""
     let date_field = choice((
-        kw("year").ignore_then(integer).map(|n| ("year", n)),
-        kw("month").ignore_then(integer).map(|n| ("month", n)),
-        kw("day").ignore_then(integer).map(|n| ("day", n)),
+        kw("year").ignore_then(integer).map(|n| {
+            let mut d = DateLiteral::default();
+            d.year = Some(n);
+            d
+        }),
+        kw("month").ignore_then(integer).map(|n| {
+            let mut d = DateLiteral::default();
+            d.month = Some(n as u32);
+            d
+        }),
+        kw("day").ignore_then(integer).map(|n| {
+            let mut d = DateLiteral::default();
+            d.day = Some(n as u32);
+            d
+        }),
+        kw("era").ignore_then(string_lit.clone()).map(|s| {
+            let mut d = DateLiteral::default();
+            d.era = Some(s);
+            d
+        }),
     ));
 
     let date_stmt = kw("date")
@@ -204,17 +221,15 @@ where
             date_field
                 .separated_by(just(Token::Comma).then(nl.clone()))
                 .at_least(1)
-                .collect::<Vec<(&str, i64)>>(),
+                .collect::<Vec<DateLiteral>>(),
         )
         .map(|fields| {
             let mut date = DateLiteral::default();
-            for (key, val) in fields {
-                match key {
-                    "year" => date.year = Some(val),
-                    "month" => date.month = Some(val as u32),
-                    "day" => date.day = Some(val as u32),
-                    _ => {}
-                }
+            for f in fields {
+                if f.year.is_some() { date.year = f.year; }
+                if f.month.is_some() { date.month = f.month; }
+                if f.day.is_some() { date.day = f.day; }
+                if f.era.is_some() { date.era = f.era; }
             }
             Statement::Date(date)
         })
@@ -467,6 +482,27 @@ mod tests {
                     assert_eq!(d.year, Some(-1247));
                     assert_eq!(d.month, Some(3));
                     assert_eq!(d.day, Some(15));
+                }
+                other => panic!("expected date, got {other:?}"),
+            },
+            _ => panic!("expected entity declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_date_with_era() {
+        let ast = parse_source(
+            "the Sundering is an event {\n    date year -1247, month 3, day 15, era \"Third Age\"\n}",
+        )
+        .unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => match &e.body[0].node {
+                Statement::Date(d) => {
+                    assert_eq!(d.year, Some(-1247));
+                    assert_eq!(d.month, Some(3));
+                    assert_eq!(d.day, Some(15));
+                    assert_eq!(d.era.as_deref(), Some("Third Age"));
                 }
                 other => panic!("expected date, got {other:?}"),
             },

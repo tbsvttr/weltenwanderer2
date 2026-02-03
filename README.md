@@ -64,7 +64,7 @@ the Order of Dawn is a faction {
 }
 
 the Great Sundering is an event {
-    date year -1247, month 3, day 15
+    date year -1247, month 3, day 15, era "Age of Ruin"
     type cataclysm
     involving [Kael Stormborn, the Order of Dawn]
 
@@ -106,7 +106,7 @@ the Prophecy of Renewal is lore {
 | `involving [<Entity>, ...]` | Relationship: participation |
 | `references [<Entity>, ...]` | Relationship: reference |
 | `caused by <Entity>` | Relationship: causation |
-| `date year N, month N, day N` | Date (year required, month/day optional) |
+| `date year N, month N, day N, era "E"` | Date (year required, month/day/era optional) |
 | `"""..."""` | Multiline description (Markdown) |
 | `-- comment` | Line comment |
 | `"string"` | Quoted string value |
@@ -163,6 +163,7 @@ All commands default to the current directory for `-d`.
 | Key | Action |
 |---|---|
 | `j` / `k` or arrows | Navigate / scroll |
+| `g` / `G` | Jump to top / bottom |
 | `Enter` | Select entity or event |
 | `Esc` | Go back |
 | `/` | Search (filter by name) |
@@ -182,9 +183,41 @@ The `ww-lsp` binary provides IDE integration via the Language Server Protocol:
 
 Point your editor's LSP client at `ww-lsp` for `.ww` files.
 
+### VS Code Extension
+
+A VS Code extension is included in `editors/vscode/`. It provides:
+
+- Syntax highlighting for `.ww` files (TextMate grammar)
+- Automatic LSP client integration (launches `ww-lsp`)
+- Configurable LSP binary path (`weltenwanderer.lspPath` setting)
+
+To use it, build the extension and install it, or open the workspace with the extension loaded from the `editors/vscode/` directory.
+
+## Example Project
+
+The `iron-kingdoms/` directory contains a complete example world split across multiple `.ww` files:
+
+```
+iron-kingdoms/
+├── world.ww         World metadata
+├── locations.ww     Locations and spatial connections
+├── characters.ww    Characters and their attributes
+├── factions.ww      Factions and memberships
+├── items.ww         Items and ownership
+└── history.ww       Historical events and timeline
+```
+
+Try it out:
+
+```bash
+ww build -d iron-kingdoms
+ww list -d iron-kingdoms
+ww tui -d iron-kingdoms
+```
+
 ## Building
 
-Requires Rust 1.88+.
+Requires Rust 1.85+ (edition 2024).
 
 ```bash
 cargo build --release
@@ -198,10 +231,13 @@ cargo build --release
 
 ```
 crates/
-├── ww-core/     Core types: Entity, World, Relationship, Query, Timeline
-├── ww-dsl/      DSL lexer (logos), parser (chumsky), compiler, diagnostics (ariadne)
-├── ww-cli/      CLI commands + ratatui TUI
-└── ww-lsp/      tower-lsp language server
+├── ww-core/         Core types: Entity, World, Relationship, Query, Timeline
+├── ww-dsl/          DSL lexer (logos), parser (chumsky), compiler, diagnostics (ariadne)
+├── ww-cli/          CLI commands + ratatui TUI
+└── ww-lsp/          tower-lsp language server
+editors/
+└── vscode/          VS Code extension (syntax highlighting + LSP client)
+iron-kingdoms/       Example world project
 ```
 
 ## License

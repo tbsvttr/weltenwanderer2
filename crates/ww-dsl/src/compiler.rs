@@ -594,6 +594,25 @@ the Ashlands is a region {
     }
 
     #[test]
+    fn compile_event_with_date_and_era() {
+        let result = compile_source(
+            r#"the Great Sundering is an event {
+    date year -1247, month 3, day 15, era "Third Age"
+    type cataclysm
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("the Great Sundering").unwrap();
+        let event = entity.components.event.as_ref().unwrap();
+        let date = event.date.as_ref().unwrap();
+        assert_eq!(date.year, -1247);
+        assert_eq!(date.month, Some(3));
+        assert_eq!(date.day, Some(15));
+        assert_eq!(date.era.as_deref(), Some("Third Age"));
+    }
+
+    #[test]
     fn compile_undefined_reference_produces_error() {
         let result = compile_source(
             r#"Kael is a character {
