@@ -447,4 +447,234 @@ mod tests {
         assert_eq!(world.entities_by_kind(&EntityKind::Location).len(), 1);
         assert_eq!(world.entities_by_kind(&EntityKind::Faction).len(), 0);
     }
+
+    // -----------------------------------------------------------------------
+    // Large-world stress tests
+    // -----------------------------------------------------------------------
+
+    const ENTITY_KINDS: &[EntityKind] = &[
+        EntityKind::Character,
+        EntityKind::Location,
+        EntityKind::Faction,
+        EntityKind::Event,
+        EntityKind::Item,
+        EntityKind::Lore,
+    ];
+
+    /// Build a world with `n` entities spread across all built-in kinds.
+    fn large_world(n: usize) -> (World, Vec<EntityId>) {
+        let mut world = test_world();
+        let mut ids = Vec::with_capacity(n);
+        for i in 0..n {
+            let kind = ENTITY_KINDS[i % ENTITY_KINDS.len()].clone();
+            let mut entity = Entity::new(kind, format!("Entity {i}"));
+            entity.description = format!("Description for entity number {i}");
+            entity.tags = vec![format!("tag-{}", i % 10)];
+            ids.push(world.add_entity(entity).unwrap());
+        }
+        (world, ids)
+    }
+
+    #[test]
+    fn stress_1000_entities() {
+        let (world, ids) = large_world(1_000);
+
+        assert_eq!(world.entity_count(), 1_000);
+        assert_eq!(ids.len(), 1_000);
+
+        // Every entity is retrievable by ID
+        for &id in &ids {
+            assert!(world.get_entity(id).is_some());
+        }
+
+        // Name lookup works for all
+        for i in 0..1_000 {
+            assert!(
+                world.find_by_name(&format!("Entity {i}")).is_some(),
+                "entity {i} not found by name"
+            );
+        }
+
+        // Kind index is correct
+        let counts = world.entity_counts_by_kind();
+        let expected_per_kind = 1_000 / ENTITY_KINDS.len();
+        for kind in ENTITY_KINDS {
+            let count = counts.get(kind).copied().unwrap_or(0);
+            // With 1000 entities and 6 kinds: 166 or 167 each
+            assert!(
+                count >= expected_per_kind && count <= expected_per_kind + 1,
+                "{kind}: expected ~{expected_per_kind}, got {count}"
+            );
+        }
+    }
+
+    #[test]
+    fn stress_dense_relationships() {
+        let (mut world, ids) = large_world(200);
+
+        // Create a relationship from every entity to the next (ring topology)
+        let rel_kinds = [
+            RelationshipKind::LocatedAt,
+            RelationshipKind::MemberOf,
+            RelationshipKind::AlliedWith,
+            RelationshipKind::OwnedBy,
+        ];
+        for i in 0..ids.len() {
+            let next = (i + 1) % ids.len();
+            let kind = rel_kinds[i % rel_kinds.len()].clone();
+            world
+                .add_relationship(Relationship::new(ids[i], kind, ids[next]))
+                .unwrap();
+        }
+
+        assert_eq!(world.relationship_count(), 200);
+
+        // Every entity should have at least one outgoing relationship
+        for &id in &ids {
+            assert!(
+                !world.relationships_from(id).is_empty(),
+                "entity {id} has no outgoing relationships"
+            );
+        }
+
+        // Every entity should have at least one incoming relationship
+        for &id in &ids {
+            assert!(
+                !world.relationships_to(id).is_empty(),
+                "entity {id} has no incoming relationships"
+            );
+        }
+
+        // Neighbors should include at least the ring neighbors
+        for &id in &ids {
+            assert!(
+                !world.neighbors(id).is_empty(),
+                "entity {id} has no neighbors"
+            );
+        }
+    }
+
+    #[test]
+    fn stress_hub_entity_many_connections() {
+        let (mut world, ids) = large_world(500);
+
+        // Make entity 0 a hub connected to all others
+        let hub = ids[0];
+        for &id in &ids[1..] {
+            world
+                .add_relationship(Relationship::new(hub, RelationshipKind::LeaderOf, id))
+                .unwrap();
+        }
+
+        assert_eq!(world.relationship_count(), 499);
+        assert_eq!(world.relationships_from(hub).len(), 499);
+        assert_eq!(world.neighbors(hub).len(), 499);
+    }
+
+    #[test]
+    fn stress_search_large_world() {
+        let (world, _) = large_world(1_000);
+
+        // Exact match by name substring
+        let results = world.search("Entity 42");
+        assert!(
+            results.iter().any(|e| e.name == "Entity 42"),
+            "search should find Entity 42"
+        );
+
+        // Search by description content
+        let results = world.search("entity number 999");
+        assert!(
+            results.iter().any(|e| e.name == "Entity 999"),
+            "search should find entity by description"
+        );
+
+        // Search by tag
+        let results = world.search("tag-0");
+        assert_eq!(results.len(), 100, "100 entities should have tag-0");
+    }
+
+    #[test]
+    fn stress_query_builder_large_world() {
+        let (world, _) = large_world(1_000);
+
+        // Filter by kind
+        let chars = world.query().kind(EntityKind::Character).execute();
+        assert!(chars.len() >= 166);
+
+        // Filter by tag
+        let tagged = world.query().tag("tag-0").execute();
+        assert_eq!(tagged.len(), 100);
+
+        // Limit + offset for pagination
+        let page1 = world.query().limit(10).execute();
+        let page2 = world.query().offset(10).limit(10).execute();
+        assert_eq!(page1.len(), 10);
+        assert_eq!(page2.len(), 10);
+        // Pages should not overlap
+        for e in &page1 {
+            assert!(
+                !page2.iter().any(|p| p.id == e.id),
+                "pages should not overlap"
+            );
+        }
+
+        // Count should match
+        let total = world.query().count();
+        assert_eq!(total, 1_000);
+    }
+
+    #[test]
+    fn stress_remove_entity_with_many_relationships() {
+        let (mut world, ids) = large_world(100);
+
+        // Connect entity 0 to all others
+        let hub = ids[0];
+        for &id in &ids[1..] {
+            world
+                .add_relationship(Relationship::new(hub, RelationshipKind::MemberOf, id))
+                .unwrap();
+        }
+        assert_eq!(world.relationship_count(), 99);
+
+        // Remove the hub — all 99 relationships should cascade
+        world.remove_entity(hub).unwrap();
+        assert_eq!(world.entity_count(), 99);
+        assert_eq!(world.relationship_count(), 0);
+
+        // No dangling references
+        for &id in &ids[1..] {
+            assert!(world.relationships_of(id).is_empty());
+        }
+    }
+
+    #[test]
+    fn stress_bidirectional_at_scale() {
+        let (mut world, ids) = large_world(100);
+
+        // AlliedWith is bidirectional — create chain
+        for i in 0..ids.len() - 1 {
+            world
+                .add_relationship(Relationship::new(
+                    ids[i],
+                    RelationshipKind::AlliedWith,
+                    ids[i + 1],
+                ))
+                .unwrap();
+        }
+
+        assert_eq!(world.relationship_count(), 99);
+
+        // Interior nodes should have 2 neighbors (left + right)
+        for &id in &ids[1..ids.len() - 1] {
+            assert_eq!(
+                world.neighbors(id).len(),
+                2,
+                "interior node should have 2 neighbors"
+            );
+        }
+        // Endpoints should have 1 neighbor
+        assert_eq!(world.neighbors(ids[0]).len(), 1);
+        assert_eq!(world.neighbors(ids[ids.len() - 1]).len(), 1);
+    }
 }

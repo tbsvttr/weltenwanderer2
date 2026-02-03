@@ -733,4 +733,169 @@ the Great Sundering is an event {
         let kael_rels = result.world.relationships_from(kael_id);
         assert!(kael_rels.len() >= 3); // member of, located at, allied with
     }
+
+    // -----------------------------------------------------------------------
+    // Large-world stress tests — DSL compilation
+    // -----------------------------------------------------------------------
+
+    /// Generate DSL source for N characters, each with properties.
+    fn generate_characters(n: usize) -> String {
+        let mut src = String::new();
+        for i in 0..n {
+            src.push_str(&format!(
+                "Character{i} is a character {{\n    species human\n    status alive\n}}\n\n"
+            ));
+        }
+        src
+    }
+
+    /// Generate DSL source for N locations (mixed subtypes) with exits forming a chain.
+    fn generate_location_chain(n: usize) -> String {
+        let subtypes = [
+            "fortress",
+            "city",
+            "town",
+            "village",
+            "region",
+            "wilderness",
+        ];
+        let mut src = String::new();
+        for i in 0..n {
+            let subtype = subtypes[i % subtypes.len()];
+            src.push_str(&format!("Location{i} is a {subtype} {{\n"));
+            src.push_str(&format!("    population {}\n", (i + 1) * 100));
+            if i + 1 < n {
+                src.push_str(&format!("    north to Location{}\n", i + 1));
+            }
+            src.push_str("}\n\n");
+        }
+        src
+    }
+
+    /// Generate a world with characters that have cross-references.
+    fn generate_connected_world(n_chars: usize, n_factions: usize) -> String {
+        let mut src = String::new();
+
+        // Factions
+        for i in 0..n_factions {
+            src.push_str(&format!(
+                "Faction{i} is a faction {{\n    type guild\n}}\n\n"
+            ));
+        }
+
+        // Characters, each a member of a faction and allied with the next character
+        for i in 0..n_chars {
+            let faction = i % n_factions;
+            src.push_str(&format!("Hero{i} is a character {{\n"));
+            src.push_str("    species human\n");
+            src.push_str(&format!("    member of Faction{faction}\n"));
+            if i + 1 < n_chars {
+                src.push_str(&format!("    allied with Hero{}\n", i + 1));
+            }
+            src.push_str("}\n\n");
+        }
+        src
+    }
+
+    #[test]
+    fn stress_compile_500_characters() {
+        let src = generate_characters(500);
+        let result = compile_source(&src);
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+        assert_eq!(result.world.entity_count(), 500);
+
+        // Spot-check a few entities
+        for i in [0, 99, 250, 499] {
+            let e = result.world.find_by_name(&format!("Character{i}")).unwrap();
+            assert_eq!(e.kind, EntityKind::Character);
+            let ch = e.components.character.as_ref().unwrap();
+            assert_eq!(ch.species.as_deref(), Some("human"));
+        }
+    }
+
+    #[test]
+    fn stress_compile_200_location_chain() {
+        let src = generate_location_chain(200);
+        let result = compile_source(&src);
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+        assert_eq!(result.world.entity_count(), 200);
+
+        // 199 exits (each location connects north to the next, except the last)
+        assert_eq!(result.world.relationship_count(), 199);
+
+        // First location has an exit
+        let loc0 = result.world.find_id_by_name("Location0").unwrap();
+        let rels = result.world.relationships_from(loc0);
+        assert!(
+            rels.iter().any(|r| r.kind == RelationshipKind::ConnectedTo),
+            "Location0 should have a north exit"
+        );
+
+        // Last location did not declare an exit, but ConnectedTo is bidirectional,
+        // so it still sees the reverse of Location198's north exit.
+        let last = result.world.find_id_by_name("Location199").unwrap();
+        let rels = result.world.relationships_from(last);
+        assert_eq!(
+            rels.len(),
+            1,
+            "last location should only have the reverse of its predecessor's exit"
+        );
+    }
+
+    #[test]
+    fn stress_compile_connected_world() {
+        let src = generate_connected_world(200, 10);
+        let result = compile_source(&src);
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        // 10 factions + 200 characters = 210 entities
+        assert_eq!(result.world.entity_count(), 210);
+
+        // Each character has a member-of relationship + alliance (except last)
+        // 200 member-of + 199 allied-with = 399
+        assert_eq!(result.world.relationship_count(), 399);
+
+        // Verify a faction has members pointing to it
+        let f0 = result.world.find_id_by_name("Faction0").unwrap();
+        let incoming = result.world.relationships_to(f0);
+        // Every 10th character is in Faction0
+        assert_eq!(incoming.len(), 20);
+    }
+
+    #[test]
+    fn stress_compile_mixed_kinds() {
+        let mut src = String::from(
+            r#"world "Stress Test World" {
+    genre "test"
+}
+
+"#,
+        );
+
+        // 50 of each kind
+        for i in 0..50 {
+            src.push_str(&format!("Char{i} is a character {{ species human }}\n"));
+            src.push_str(&format!(
+                "Place{i} is a city {{ population {} }}\n",
+                i * 100
+            ));
+            src.push_str(&format!("Group{i} is a faction {{ type guild }}\n"));
+            src.push_str(&format!("Event{i} is an event {{ date year {i} }}\n"));
+            src.push_str(&format!("Thing{i} is an item {{ rarity common }}\n"));
+            src.push_str(&format!("Lore{i} is lore {{ source \"ancient\" }}\n"));
+        }
+
+        let result = compile_source(&src);
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+        assert_eq!(result.world.entity_count(), 300);
+        assert_eq!(result.world.meta.name, "Stress Test World");
+
+        let counts = result.world.entity_counts_by_kind();
+        assert_eq!(counts[&EntityKind::Character], 50);
+        assert_eq!(counts[&EntityKind::Location], 50);
+        assert_eq!(counts[&EntityKind::Faction], 50);
+        assert_eq!(counts[&EntityKind::Event], 50);
+        assert_eq!(counts[&EntityKind::Item], 50);
+        assert_eq!(counts[&EntityKind::Lore], 50);
+    }
 }
