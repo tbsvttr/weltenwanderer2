@@ -137,9 +137,17 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(kind: EntityKind, name: impl Into<String>) -> Self {
+        Self::with_id(EntityId::new(), kind, name)
+    }
+
+    /// Create an entity with a pre-assigned ID.
+    ///
+    /// Used by the DSL compiler when the resolver has already assigned IDs
+    /// during the name-resolution pass.
+    pub fn with_id(id: EntityId, kind: EntityKind, name: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
-            id: EntityId::new(),
+            id,
             kind,
             name: name.into(),
             description: String::new(),
@@ -195,6 +203,15 @@ mod tests {
     fn new_entity_has_timestamps() {
         let entity = Entity::new(EntityKind::Character, "Kael");
         assert!(!entity.name.is_empty());
+        assert_eq!(entity.kind, EntityKind::Character);
+    }
+
+    #[test]
+    fn with_id_preserves_given_id() {
+        let id = EntityId(Uuid::parse_str("a3f2b1c8-1234-5678-9abc-def012345678").unwrap());
+        let entity = Entity::with_id(id, EntityKind::Character, "Kael");
+        assert_eq!(entity.id, id);
+        assert_eq!(entity.name, "Kael");
         assert_eq!(entity.kind, EntityKind::Character);
     }
 }

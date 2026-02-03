@@ -119,12 +119,123 @@ use std::path::Path;
 
 pub use compiler::CompileResult;
 pub use diagnostics::Diagnostic;
+pub use resolver::SourceMap;
+
+/// An input file for multi-file compilation.
+pub struct InputFile {
+    /// Display name (e.g., "characters.ww").
+    pub name: String,
+    /// Source text content.
+    pub text: String,
+}
 
 /// Compile a single source string into a World.
 pub fn compile_source(source: &str) -> CompileResult {
+    let source_map = resolver::SourceMap::single(source.len());
+    compile_with_source_map(source, source_map)
+}
+
+/// Compile multiple named source files into a single World.
+///
+/// This is the preferred API when file contents are already in memory
+/// (e.g., from the LSP). The returned [`CompileResult`] includes a
+/// [`SourceMap`] that maps diagnostic spans back to individual files.
+pub fn compile_files(files: &[InputFile]) -> CompileResult {
+    let mut concatenated = String::new();
+    let mut source_map = resolver::SourceMap::new();
+
+    for file in files {
+        if !concatenated.is_empty() {
+            concatenated.push('\n');
+        }
+        let offset = concatenated.len();
+        source_map.add_file(file.name.clone(), offset, file.text.len());
+        concatenated.push_str(&file.text);
+    }
+
+    if concatenated.is_empty() {
+        return CompileResult {
+            world: ww_core::World::new(ww_core::WorldMeta::new("Empty")),
+            diagnostics: vec![Diagnostic::error(0..0, "no source files provided")],
+            source_map,
+        };
+    }
+
+    compile_with_source_map(&concatenated, source_map)
+}
+
+/// Compile all `.ww` files in a directory into a single World.
+pub fn compile_dir(dir: &Path) -> CompileResult {
+    let mut sources = String::new();
+    let mut source_map = resolver::SourceMap::new();
+
+    let mut entries: Vec<_> = match std::fs::read_dir(dir) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ww"))
+            .collect(),
+        Err(e) => {
+            return CompileResult {
+                world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
+                diagnostics: vec![Diagnostic::error(
+                    0..0,
+                    format!("cannot read directory: {e}"),
+                )],
+                source_map,
+            };
+        }
+    };
+
+    // Sort for deterministic ordering
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        match std::fs::read_to_string(entry.path()) {
+            Ok(content) => {
+                if !sources.is_empty() {
+                    sources.push('\n');
+                }
+                let offset = sources.len();
+                let len = content.len();
+                let file_name = entry
+                    .path()
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| entry.path().display().to_string());
+                source_map.add_file(file_name, offset, len);
+                sources.push_str(&content);
+            }
+            Err(e) => {
+                return CompileResult {
+                    world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
+                    diagnostics: vec![Diagnostic::error(
+                        0..0,
+                        format!("cannot read {}: {e}", entry.path().display()),
+                    )],
+                    source_map,
+                };
+            }
+        }
+    }
+
+    if sources.is_empty() {
+        return CompileResult {
+            world: ww_core::World::new(ww_core::WorldMeta::new("Empty")),
+            diagnostics: vec![Diagnostic::error(
+                0..0,
+                format!("no .ww files found in {}", dir.display()),
+            )],
+            source_map,
+        };
+    }
+
+    compile_with_source_map(&sources, source_map)
+}
+
+/// Internal: compile a source string with an explicit SourceMap.
+fn compile_with_source_map(source: &str, source_map: resolver::SourceMap) -> CompileResult {
     let (tokens, lex_errors) = lexer::lex(source);
 
-    // Convert lex errors to diagnostics
     let mut diagnostics: Vec<Diagnostic> = lex_errors
         .into_iter()
         .map(|e| Diagnostic::error(e.span, e.message))
@@ -141,67 +252,15 @@ pub fn compile_source(source: &str) -> CompileResult {
             return CompileResult {
                 world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
                 diagnostics,
+                source_map,
             };
         }
     };
 
-    let mut result = compiler::compile(&ast);
-    result.diagnostics.extend(diagnostics);
+    let resolver = resolver::Resolver::resolve(&ast, &source_map);
+    let mut result = compiler::compile(&ast, &resolver, source_map);
+    // Prepend lex/parse errors before resolve/compile diagnostics
+    diagnostics.append(&mut result.diagnostics);
+    result.diagnostics = diagnostics;
     result
-}
-
-/// Compile all `.ww` files in a directory into a single World.
-pub fn compile_dir(dir: &Path) -> CompileResult {
-    let mut sources = String::new();
-
-    let mut entries: Vec<_> = match std::fs::read_dir(dir) {
-        Ok(entries) => entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ww"))
-            .collect(),
-        Err(e) => {
-            return CompileResult {
-                world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
-                diagnostics: vec![Diagnostic::error(
-                    0..0,
-                    format!("cannot read directory: {e}"),
-                )],
-            };
-        }
-    };
-
-    // Sort for deterministic ordering
-    entries.sort_by_key(|e| e.path());
-
-    for entry in entries {
-        match std::fs::read_to_string(entry.path()) {
-            Ok(content) => {
-                if !sources.is_empty() {
-                    sources.push('\n');
-                }
-                sources.push_str(&content);
-            }
-            Err(e) => {
-                return CompileResult {
-                    world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
-                    diagnostics: vec![Diagnostic::error(
-                        0..0,
-                        format!("cannot read {}: {e}", entry.path().display()),
-                    )],
-                };
-            }
-        }
-    }
-
-    if sources.is_empty() {
-        return CompileResult {
-            world: ww_core::World::new(ww_core::WorldMeta::new("Empty")),
-            diagnostics: vec![Diagnostic::error(
-                0..0,
-                format!("no .ww files found in {}", dir.display()),
-            )],
-        };
-    }
-
-    compile_source(&sources)
 }

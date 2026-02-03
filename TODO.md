@@ -13,7 +13,7 @@
 - [ ] Nested blocks (sub-entities or grouped properties)
 - [ ] Entity inheritance / traits (extend an existing entity kind)
 - [ ] Inline relationships (e.g. `Kael (leader of the Order)`)
-- [ ] Implement resolver (cross-file name resolution — currently a stub)
+- [x] Implement resolver (cross-file name resolution)
 - [ ] Malformed input recovery tests
 
 ### ww-cli

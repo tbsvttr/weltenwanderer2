@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ww_core::component::*;
 use ww_core::entity::{Entity, EntityId, EntityKind, MetadataValue};
 use ww_core::relationship::{Relationship, RelationshipKind};
@@ -7,11 +5,13 @@ use ww_core::world::{World, WorldMeta};
 
 use crate::ast::*;
 use crate::diagnostics::{Diagnostic, Severity};
+use crate::resolver::{Resolver, SourceMap};
 
 /// Result of compiling DSL source into a World.
 pub struct CompileResult {
     pub world: World,
     pub diagnostics: Vec<Diagnostic>,
+    pub source_map: SourceMap,
 }
 
 impl CompileResult {
@@ -25,30 +25,35 @@ impl CompileResult {
 /// Compile a parsed AST into a ww-core World.
 ///
 /// The compilation happens in two passes:
-/// 1. **Entity pass**: create all entities (so names are known)
-/// 2. **Relationship pass**: resolve name references and create relationships
-pub fn compile(ast: &SourceFile) -> CompileResult {
-    let mut compiler = Compiler::new();
+/// 1. **Entity pass**: create all entities using IDs pre-assigned by the resolver
+/// 2. **Relationship pass**: resolve name references via the resolver and create relationships
+pub fn compile(ast: &SourceFile, resolver: &Resolver, source_map: SourceMap) -> CompileResult {
+    let mut compiler = Compiler::new(resolver, &source_map);
     compiler.compile(ast);
+    // Merge resolver diagnostics (duplicates) first, then compiler diagnostics
+    let mut diagnostics = resolver.diagnostics.clone();
+    diagnostics.append(&mut compiler.diagnostics);
     CompileResult {
         world: compiler.world,
-        diagnostics: compiler.diagnostics,
+        diagnostics,
+        source_map,
     }
 }
 
-struct Compiler {
+struct Compiler<'a> {
     world: World,
     diagnostics: Vec<Diagnostic>,
-    /// Map from entity name (lowercased) to the EntityId, for name resolution.
-    name_to_id: HashMap<String, EntityId>,
+    resolver: &'a Resolver,
+    source_map: &'a SourceMap,
 }
 
-impl Compiler {
-    fn new() -> Self {
+impl<'a> Compiler<'a> {
+    fn new(resolver: &'a Resolver, source_map: &'a SourceMap) -> Self {
         Self {
             world: World::new(WorldMeta::new("Untitled")),
             diagnostics: Vec::new(),
-            name_to_id: HashMap::new(),
+            resolver,
+            source_map,
         }
     }
 
@@ -102,8 +107,14 @@ impl Compiler {
     }
 
     fn compile_entity_pass1(&mut self, decl: &EntityDecl) {
+        // Skip entities the resolver flagged as duplicates
+        let resolved = match self.resolver.get(&decl.name.node) {
+            Some(r) => r,
+            None => return,
+        };
+
         let (kind, location_subtype) = EntityKind::parse(&decl.kind.node.to_lowercase());
-        let mut entity = Entity::new(kind, &decl.name.node);
+        let mut entity = Entity::with_id(resolved.id, kind, &decl.name.node);
 
         // Set location subtype if applicable
         if let Some(subtype) = location_subtype {
@@ -130,17 +141,9 @@ impl Compiler {
             }
         }
 
-        let name_lower = entity.name.to_lowercase();
-        let id = entity.id;
-
-        match self.world.add_entity(entity) {
-            Ok(_) => {
-                self.name_to_id.insert(name_lower, id);
-            }
-            Err(e) => {
-                self.diagnostics
-                    .push(Diagnostic::error(decl.name.span.clone(), e.to_string()));
-            }
+        if let Err(e) = self.world.add_entity(entity) {
+            self.diagnostics
+                .push(Diagnostic::error(decl.name.span.clone(), e.to_string()));
         }
     }
 
@@ -406,16 +409,8 @@ impl Compiler {
     // -- Name resolution --
 
     fn resolve_name(&mut self, name: &str, span: &crate::ast::Span) -> Option<EntityId> {
-        let lower = name.to_lowercase();
-        if let Some(&id) = self.name_to_id.get(&lower) {
-            Some(id)
-        } else {
-            self.diagnostics.push(
-                Diagnostic::error(span.clone(), format!("undefined entity: \"{name}\""))
-                    .with_label("not defined in any .ww file"),
-            );
-            None
-        }
+        self.resolver
+            .lookup(name, span, self.source_map, &mut self.diagnostics)
     }
 
     // -- Value conversion helpers --
@@ -458,7 +453,9 @@ mod tests {
         let (tokens, lex_errors) = lexer::lex(source);
         assert!(lex_errors.is_empty(), "lex errors: {lex_errors:?}");
         let ast = parser::parse(&tokens).expect("parse error");
-        compile(&ast)
+        let source_map = SourceMap::single(source.len());
+        let resolver = Resolver::resolve(&ast, &source_map);
+        compile(&ast, &resolver, source_map)
     }
 
     #[test]
