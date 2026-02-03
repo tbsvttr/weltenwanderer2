@@ -20,7 +20,7 @@
 
 - [x] Commands: init, build, check, list, show, search, graph, timeline, export, new
 - [x] ratatui TUI with entity list, detail, graph, timeline views
-- [ ] CLI command integration tests (10 commands, 0 tests)
+- [x] CLI command integration tests (10 commands, 28 tests)
 - [ ] TUI app state and navigation tests
 - [ ] Typed error enum instead of `Result<(), String>`
 - [ ] `ww watch` — rebuild on file changes
