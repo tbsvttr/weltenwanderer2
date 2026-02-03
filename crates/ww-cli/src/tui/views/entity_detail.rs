@@ -4,10 +4,7 @@ use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use crate::tui::app::App;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
-    let entity = match app
-        .detail_entity_id
-        .and_then(|id| app.world.get_entity(id))
-    {
+    let entity = match app.detail_entity_id.and_then(|id| app.world.get_entity(id)) {
         Some(e) => e,
         None => {
             let msg = Paragraph::new("No entity selected")
@@ -29,25 +26,30 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(vec![
         Span::styled(entity.name.clone(), Style::default().fg(Color::Cyan).bold()),
         Span::raw("  "),
-        Span::styled(format!("[{kind_str}]"), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("[{kind_str}]"),
+            Style::default().fg(Color::DarkGray),
+        ),
     ]));
     lines.push(Line::from(""));
 
     // Description
     if !entity.description.is_empty() {
         for desc_line in entity.description.lines() {
-            lines.push(Line::from(
-                Span::styled(desc_line.trim().to_string(), Style::default().fg(Color::White)),
-            ));
+            lines.push(Line::from(Span::styled(
+                desc_line.trim().to_string(),
+                Style::default().fg(Color::White),
+            )));
         }
         lines.push(Line::from(""));
     }
 
     // Component-specific fields
     if let Some(char_comp) = &entity.components.character {
-        lines.push(Line::from(
-            Span::styled("Character", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Character",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if let Some(ref species) = char_comp.species {
             lines.push(field_line("  species", species));
         }
@@ -62,9 +64,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if let Some(loc_comp) = &entity.components.location {
-        lines.push(Line::from(
-            Span::styled("Location", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Location",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if loc_comp.location_type != "location" {
             lines.push(field_line("  type", &loc_comp.location_type));
         }
@@ -81,9 +84,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if let Some(faction_comp) = &entity.components.faction {
-        lines.push(Line::from(
-            Span::styled("Faction", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Faction",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if let Some(ref ft) = faction_comp.faction_type {
             lines.push(field_line("  type", ft));
         }
@@ -94,9 +98,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if let Some(event_comp) = &entity.components.event {
-        lines.push(Line::from(
-            Span::styled("Event", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Event",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if let Some(ref et) = event_comp.event_type {
             lines.push(field_line("  type", et));
         }
@@ -110,9 +115,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if let Some(item_comp) = &entity.components.item {
-        lines.push(Line::from(
-            Span::styled("Item", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Item",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if let Some(ref it) = item_comp.item_type {
             lines.push(field_line("  type", it));
         }
@@ -123,9 +129,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if let Some(lore_comp) = &entity.components.lore {
-        lines.push(Line::from(
-            Span::styled("Lore", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Lore",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         if let Some(ref lt) = lore_comp.lore_type {
             lines.push(field_line("  type", lt));
         }
@@ -137,9 +144,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     // Properties
     if !entity.properties.is_empty() {
-        lines.push(Line::from(
-            Span::styled("Properties", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Properties",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         let mut props: Vec<_> = entity.properties.iter().collect();
         props.sort_by_key(|(k, _)| (*k).clone());
         for (key, value) in props {
@@ -151,9 +159,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     // Relationships
     let rels = app.world.relationships_of(entity.id);
     if !rels.is_empty() {
-        lines.push(Line::from(
-            Span::styled("Relationships", Style::default().fg(Color::Yellow).bold()),
-        ));
+        lines.push(Line::from(Span::styled(
+            "Relationships",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
         for rel in &rels {
             let other_id = if rel.source == entity.id {
                 rel.target
@@ -196,10 +205,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
 fn field_line(label: &str, value: &str) -> Line<'static> {
     Line::from(vec![
-        Span::styled(
-            format!("{label:<14}"),
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled(format!("{label:<14}"), Style::default().fg(Color::DarkGray)),
         Span::styled(value.to_string(), Style::default().fg(Color::White)),
     ])
 }

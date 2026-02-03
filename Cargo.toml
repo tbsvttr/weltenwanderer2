@@ -56,3 +56,9 @@ tokio = { version = "1", features = ["full"] }
 # Internal crates
 ww-core = { path = "crates/ww-core" }
 ww-dsl = { path = "crates/ww-dsl" }
+
+[workspace.lints.clippy]
+all = { level = "deny" }
+
+[workspace.lints.rust]
+unsafe_code = { level = "forbid" }

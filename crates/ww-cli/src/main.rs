@@ -136,7 +136,7 @@ enum Commands {
         /// Entity name
         name: String,
 
-        /// File to append to (default: <kind>s.ww)
+        /// File to append to (default: `<kind>s.ww`)
         #[arg(short, long)]
         file: Option<PathBuf>,
     },
@@ -149,7 +149,9 @@ fn main() {
         Commands::Init { name } => commands::init::run(&name),
         Commands::Build { dir } => commands::build::run(&dir),
         Commands::Check { dir } => commands::check::run(&dir),
-        Commands::List { kind, tag, dir } => commands::list::run(&dir, kind.as_deref(), tag.as_deref()),
+        Commands::List { kind, tag, dir } => {
+            commands::list::run(&dir, kind.as_deref(), tag.as_deref())
+        }
         Commands::Show {
             name,
             relationships,
@@ -163,9 +165,7 @@ fn main() {
             output,
             dir,
         } => commands::export::run(&dir, &format, output.as_deref()),
-        Commands::Tui { dir } => {
-            commands::compile_dir_for_tui(&dir).and_then(tui::run)
-        }
+        Commands::Tui { dir } => commands::compile_dir_for_tui(&dir).and_then(tui::run),
         Commands::Lsp => {
             // Exec the separate ww-lsp binary
             let status = std::process::Command::new("ww-lsp")
@@ -176,7 +176,10 @@ fn main() {
             match status {
                 Ok(s) if s.success() => Ok(()),
                 Ok(s) => Err(format!("ww-lsp exited with {s}")),
-                Err(_) => Err("ww-lsp binary not found. Install it with: cargo install --path crates/ww-lsp".into()),
+                Err(_) => Err(
+                    "ww-lsp binary not found. Install it with: cargo install --path crates/ww-lsp"
+                        .into(),
+                ),
             }
         }
         Commands::New { kind, name, file } => commands::new::run(&kind, &name, file.as_deref()),

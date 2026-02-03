@@ -55,7 +55,7 @@ pub fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::Timeline => {
                 "Timeline | j/k:navigate Enter:select Tab:view ?:help q:quit".to_string()
             }
-        }
+        },
     };
 
     let bar = Paragraph::new(status).style(Style::default().fg(Color::Black).bg(Color::White));

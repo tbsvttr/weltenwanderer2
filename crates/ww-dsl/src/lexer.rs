@@ -123,7 +123,8 @@ pub fn lex(source: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<LexError>
                             None => {
                                 errors.push(LexError {
                                     span: span.clone(),
-                                    message: "unterminated doc string (missing closing \"\"\")".to_string(),
+                                    message: "unterminated doc string (missing closing \"\"\")"
+                                        .to_string(),
                                 });
                                 continue;
                             }
@@ -200,7 +201,18 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(words, vec!["Kael", "Stormborn", "is", "a", "character", "species", "human"]);
+        assert_eq!(
+            words,
+            vec![
+                "Kael",
+                "Stormborn",
+                "is",
+                "a",
+                "character",
+                "species",
+                "human"
+            ]
+        );
     }
 
     #[test]
@@ -234,7 +246,10 @@ mod tests {
         assert!(errors.is_empty());
 
         let types: Vec<_> = tokens.iter().map(|(t, _)| format!("{t}")).collect();
-        assert_eq!(types, vec!["[", "brave", ",", "stubborn", ",", "loyal", "]"]);
+        assert_eq!(
+            types,
+            vec!["[", "brave", ",", "stubborn", ",", "loyal", "]"]
+        );
     }
 
     #[test]
@@ -256,7 +271,9 @@ mod tests {
     fn lex_float() {
         let (tokens, errors) = lex("3.14");
         assert!(errors.is_empty());
-        assert!(matches!(&tokens[0].0, Token::Float(f) if (*f - 3.14).abs() < f64::EPSILON));
+        #[allow(clippy::approx_constant)]
+        let expected = 3.14;
+        assert!(matches!(&tokens[0].0, Token::Float(f) if (*f - expected).abs() < f64::EPSILON));
     }
 
     #[test]

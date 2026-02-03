@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> pre-commit: running checks..."
+
+echo "--- cargo fmt --check"
+cargo fmt --check
+
+echo "--- cargo clippy"
+cargo clippy --workspace --all-targets -- -D warnings
+
+echo "--- cargo test"
+cargo test --workspace
+
+echo "--- cargo doc (warnings = errors)"
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+
+if command -v cargo-deny &>/dev/null; then
+    echo "--- cargo deny check"
+    cargo deny check
+else
+    echo "--- cargo deny: skipped (not installed, run 'make setup')"
+fi
+
+echo "==> pre-commit: all checks passed."

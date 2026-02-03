@@ -47,10 +47,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         };
 
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("[{source_name}]"),
-                Style::default().fg(Color::Cyan),
-            ),
+            Span::styled(format!("[{source_name}]"), Style::default().fg(Color::Cyan)),
             Span::styled(arrow.to_string(), Style::default().fg(Color::DarkGray)),
             Span::styled(label, Style::default().fg(Color::Yellow)),
             Span::styled(arrow.to_string(), Style::default().fg(Color::DarkGray)),
@@ -62,9 +59,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     if lines.is_empty() {
-        lines.push(Line::from(
-            Span::styled("No relationships.", Style::default().fg(Color::DarkGray)),
-        ));
+        lines.push(Line::from(Span::styled(
+            "No relationships.",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     // Summary
@@ -74,23 +72,19 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     sorted.sort_by_key(|(k, _)| format!("{k}"));
     let summary: Vec<String> = sorted.iter().map(|(k, v)| format!("{v} {k}")).collect();
 
-    lines.push(Line::from(vec![
-        Span::styled(
-            format!(
-                "{} entities, {} relationships",
-                app.world.entity_count(),
-                app.world.relationship_count()
-            ),
-            Style::default().fg(Color::DarkGray),
+    lines.push(Line::from(vec![Span::styled(
+        format!(
+            "{} entities, {} relationships",
+            app.world.entity_count(),
+            app.world.relationship_count()
         ),
-    ]));
+        Style::default().fg(Color::DarkGray),
+    )]));
     if !summary.is_empty() {
-        lines.push(Line::from(
-            Span::styled(
-                format!("({})", summary.join(", ")),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ));
+        lines.push(Line::from(Span::styled(
+            format!("({})", summary.join(", ")),
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     let paragraph = Paragraph::new(lines)

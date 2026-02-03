@@ -12,5 +12,8 @@ chumsky = { workspace = true }
 ariadne = { workspace = true }
 miette = { workspace = true }
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 insta = { workspace = true }

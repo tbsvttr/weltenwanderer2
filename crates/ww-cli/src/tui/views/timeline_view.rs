@@ -10,13 +10,12 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     let entries = timeline.entries();
 
     if entries.is_empty() {
-        let msg = ratatui::widgets::Paragraph::new("  No events with dates found.")
-            .block(
-                Block::default()
-                    .title(" Timeline ")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow)),
-            );
+        let msg = ratatui::widgets::Paragraph::new("  No events with dates found.").block(
+            Block::default()
+                .title(" Timeline ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        );
         frame.render_widget(msg, area);
         return;
     }
@@ -60,12 +59,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow)),
         )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .fg(Color::White)
-                .bold(),
-        )
+        .highlight_style(Style::default().bg(Color::DarkGray).fg(Color::White).bold())
         .highlight_symbol("▶ ");
 
     let mut state = ListState::default();

@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use ww_core::entity::EntityKind;
 use ww_core::World;
+use ww_core::entity::EntityKind;
 
 pub fn run(dir: &Path, format: &str, output: Option<&Path>) -> Result<(), String> {
     let world = super::compile_dir(dir)?;
@@ -10,11 +10,16 @@ pub fn run(dir: &Path, format: &str, output: Option<&Path>) -> Result<(), String
         "json" => export_json(&world)?,
         "markdown" | "md" => export_markdown(&world),
         "html" => export_html(&world),
-        _ => return Err(format!("unsupported format: \"{format}\". Use: json, markdown, html")),
+        _ => {
+            return Err(format!(
+                "unsupported format: \"{format}\". Use: json, markdown, html"
+            ));
+        }
     };
 
     if let Some(path) = output {
-        std::fs::write(path, &content).map_err(|e| format!("cannot write to {}: {e}", path.display()))?;
+        std::fs::write(path, &content)
+            .map_err(|e| format!("cannot write to {}: {e}", path.display()))?;
         println!("  Exported to {}", path.display());
     } else {
         print!("{content}");

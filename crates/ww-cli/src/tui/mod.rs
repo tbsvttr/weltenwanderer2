@@ -4,13 +4,15 @@ mod views;
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use ratatui::prelude::*;
 
 use ww_core::World;
 
-use app::{App, ActiveView, InputMode};
+use app::{ActiveView, App, InputMode};
 
 pub fn run(world: World) -> Result<(), String> {
     enable_raw_mode().map_err(|e| format!("terminal error: {e}"))?;
@@ -31,7 +33,10 @@ pub fn run(world: World) -> Result<(), String> {
     result
 }
 
-fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<(), String> {
+fn run_loop(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+) -> Result<(), String> {
     loop {
         terminal
             .draw(|frame| draw(frame, app))
@@ -77,7 +82,7 @@ fn draw(frame: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // Tab bar
-            Constraint::Min(0),   // Main content
+            Constraint::Min(0),    // Main content
             Constraint::Length(1), // Status bar
         ])
         .split(frame.area());

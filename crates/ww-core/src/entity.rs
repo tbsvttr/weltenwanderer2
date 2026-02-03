@@ -73,9 +73,7 @@ impl EntityKind {
             "event" => (Self::Event, None),
             "item" => (Self::Item, None),
             "lore" => (Self::Lore, None),
-            other if Self::is_location_subtype(other) => {
-                (Self::Location, Some(other.to_string()))
-            }
+            other if Self::is_location_subtype(other) => (Self::Location, Some(other.to_string())),
             other => (Self::Custom(other.to_string()), None),
         }
     }

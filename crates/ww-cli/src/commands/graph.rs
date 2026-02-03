@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use ww_core::entity::EntityId;
 use ww_core::World;
+use ww_core::entity::EntityId;
 
 pub fn run(dir: &Path, focus: Option<&str>) -> Result<(), String> {
     let world = super::compile_dir(dir)?;
@@ -99,11 +99,7 @@ fn render_full_graph(world: &World) {
             .map(|e| e.name.as_str())
             .unwrap_or("???");
 
-        let arrow = if rel.bidirectional {
-            "<-->"
-        } else {
-            " -->"
-        };
+        let arrow = if rel.bidirectional { "<-->" } else { " -->" };
         let label = if let Some(ref l) = rel.label {
             format!("{} ({})", rel.kind.as_phrase(), l)
         } else {

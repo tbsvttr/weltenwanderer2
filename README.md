@@ -227,6 +227,34 @@ cargo build --release
 #   target/release/ww-lsp   — Language server
 ```
 
+## Development
+
+After cloning, run setup once to install git hooks and tooling:
+
+```bash
+make setup
+```
+
+This configures a pre-commit hook that enforces all quality checks before every commit:
+
+| Check | Command | What it catches |
+|---|---|---|
+| Formatting | `cargo fmt --check` | Style violations |
+| Linting | `cargo clippy -- -D warnings` | Bugs, anti-patterns, complexity |
+| Tests | `cargo test --workspace` | Regressions |
+| Documentation | `cargo doc` (warnings = errors) | Broken doc references |
+| Dependencies | `cargo deny check` | License issues, vulnerabilities |
+
+Run all checks manually at any time:
+
+```bash
+make check      # run everything
+make fmt        # formatting only
+make lint       # clippy only
+make test       # tests only
+make fix        # auto-fix formatting + clippy suggestions
+```
+
 ## Project Structure
 
 ```

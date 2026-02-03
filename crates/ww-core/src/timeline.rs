@@ -45,13 +45,15 @@ impl<'w> Timeline<'w> {
             .into_iter()
             .filter(|entry| {
                 if let Some(from_year) = from
-                    && entry.date.year < from_year {
-                        return false;
-                    }
+                    && entry.date.year < from_year
+                {
+                    return false;
+                }
                 if let Some(to_year) = to
-                    && entry.date.year > to_year {
-                        return false;
-                    }
+                    && entry.date.year > to_year
+                {
+                    return false;
+                }
                 true
             })
             .collect();

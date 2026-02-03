@@ -94,10 +94,7 @@ impl Compiler {
                     }
                     other => {
                         let mv = self.value_to_metadata(&prop.value);
-                        self.world
-                            .meta
-                            .properties
-                            .insert(other.to_string(), mv);
+                        self.world.meta.properties.insert(other.to_string(), mv);
                     }
                 }
             }
@@ -141,10 +138,8 @@ impl Compiler {
                 self.name_to_id.insert(name_lower, id);
             }
             Err(e) => {
-                self.diagnostics.push(Diagnostic::error(
-                    decl.name.span.clone(),
-                    e.to_string(),
-                ));
+                self.diagnostics
+                    .push(Diagnostic::error(decl.name.span.clone(), e.to_string()));
             }
         }
     }
@@ -196,9 +191,7 @@ impl Compiler {
             // "owned by X" means X owns self, so X is source
             // "involving [X, Y]" means X/Y participated in self
             let (src, tgt) = match rel.keyword {
-                RelationshipKeyword::LedBy | RelationshipKeyword::OwnedBy => {
-                    (target_id, source_id)
-                }
+                RelationshipKeyword::LedBy | RelationshipKeyword::OwnedBy => (target_id, source_id),
                 RelationshipKeyword::Involving => (target_id, source_id),
                 _ => (source_id, target_id),
             };
@@ -251,17 +244,26 @@ impl Compiler {
         match prop.key.as_str() {
             // Character fields
             "species" => {
-                let comp = entity.components.character.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .character
+                    .get_or_insert_with(Default::default);
                 comp.species = self.value_as_string(&prop.value);
                 true
             }
             "occupation" => {
-                let comp = entity.components.character.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .character
+                    .get_or_insert_with(Default::default);
                 comp.occupation = self.value_as_string(&prop.value);
                 true
             }
             "status" => {
-                let comp = entity.components.character.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .character
+                    .get_or_insert_with(Default::default);
                 if let Some(s) = self.value_as_string(&prop.value) {
                     comp.status = match s.to_lowercase().as_str() {
                         "alive" => CharacterStatus::Alive,
@@ -273,7 +275,10 @@ impl Compiler {
                 true
             }
             "traits" => {
-                let comp = entity.components.character.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .character
+                    .get_or_insert_with(Default::default);
                 if let Value::List(items) = &prop.value {
                     comp.traits = items
                         .iter()
@@ -285,17 +290,26 @@ impl Compiler {
 
             // Location fields
             "climate" => {
-                let comp = entity.components.location.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .location
+                    .get_or_insert_with(Default::default);
                 comp.climate = self.value_as_string(&prop.value);
                 true
             }
             "terrain" => {
-                let comp = entity.components.location.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .location
+                    .get_or_insert_with(Default::default);
                 comp.terrain = self.value_as_string(&prop.value);
                 true
             }
             "population" => {
-                let comp = entity.components.location.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .location
+                    .get_or_insert_with(Default::default);
                 if let Value::Integer(n) = &prop.value {
                     comp.population = Some(*n as u64);
                 }
@@ -304,12 +318,18 @@ impl Compiler {
 
             // Faction fields
             "alignment" => {
-                let comp = entity.components.faction.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .faction
+                    .get_or_insert_with(Default::default);
                 comp.alignment = self.value_as_string(&prop.value);
                 true
             }
             "values" => {
-                let comp = entity.components.faction.get_or_insert_with(Default::default);
+                let comp = entity
+                    .components
+                    .faction
+                    .get_or_insert_with(Default::default);
                 if let Value::List(items) = &prop.value {
                     comp.values = items
                         .iter()
@@ -620,9 +640,7 @@ the Ashlands is a region {
 }"#,
         );
         assert!(result.has_errors());
-        assert!(result.diagnostics[0]
-            .message
-            .contains("undefined entity"));
+        assert!(result.diagnostics[0].message.contains("undefined entity"));
     }
 
     #[test]

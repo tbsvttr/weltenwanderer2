@@ -1,5 +1,5 @@
-use ww_core::entity::{Entity, EntityId, EntityKind};
 use ww_core::World;
+use ww_core::entity::{Entity, EntityId, EntityKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveView {

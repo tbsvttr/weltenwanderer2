@@ -244,11 +244,7 @@ impl World {
     pub fn entities_by_kind(&self, kind: &EntityKind) -> Vec<&Entity> {
         self.by_kind
             .get(kind)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.entities.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.entities.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -270,7 +266,9 @@ impl World {
             .filter(|e| {
                 e.name.to_lowercase().contains(&query_lower)
                     || e.description.to_lowercase().contains(&query_lower)
-                    || e.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+                    || e.tags
+                        .iter()
+                        .any(|t| t.to_lowercase().contains(&query_lower))
             })
             .collect()
     }
@@ -412,11 +410,7 @@ mod tests {
             .unwrap();
 
         world
-            .add_relationship(Relationship::new(
-                a,
-                RelationshipKind::AlliedWith,
-                b,
-            ))
+            .add_relationship(Relationship::new(a, RelationshipKind::AlliedWith, b))
             .unwrap();
 
         world.remove_entity(a).unwrap();

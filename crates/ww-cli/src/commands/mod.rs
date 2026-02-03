@@ -12,8 +12,8 @@ pub mod timeline;
 use std::path::Path;
 
 use ww_core::World;
-use ww_dsl::diagnostics::{render_diagnostics, Severity};
 use ww_dsl::CompileResult;
+use ww_dsl::diagnostics::{Severity, render_diagnostics};
 
 /// Compile for TUI: same as compile_dir but public for main.rs to call.
 pub fn compile_dir_for_tui(dir: &Path) -> Result<World, String> {
@@ -81,11 +81,7 @@ fn read_all_sources(dir: &Path) -> String {
     if let Ok(entries) = std::fs::read_dir(dir) {
         let mut files: Vec<_> = entries
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .is_some_and(|ext| ext == "ww")
-            })
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ww"))
             .collect();
         files.sort_by_key(|e| e.path());
         for entry in files {

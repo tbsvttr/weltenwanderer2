@@ -50,9 +50,7 @@ where
 {
     // -- Helpers --
 
-    let kw = |k: &'static str| {
-        select! { Token::Word(ref w) if w.as_str() == k => () }.labelled(k)
-    };
+    let kw = |k: &'static str| select! { Token::Word(ref w) if w.as_str() == k => () }.labelled(k);
     let word = select! { Token::Word(w) => w }.labelled("word");
     let string_lit = select! { Token::Str(s) => s }.labelled("string");
     let integer = select! { Token::Integer(n) => n }.labelled("integer");
@@ -67,8 +65,7 @@ where
     // -- Entity name (in reference position) --
     let name_ref = choice((
         string_lit.map_with(|s, e| spanned(s, e.span())),
-        word
-            .repeated()
+        word.repeated()
             .at_least(1)
             .collect::<Vec<String>>()
             .map_with(|words, e| spanned(words.join(" "), e.span())),
@@ -78,8 +75,7 @@ where
     // -- Entity name in lists (same as name_ref) --
     let name_in_list = choice((
         string_lit.map_with(|s, e| spanned(s, e.span())),
-        word
-            .repeated()
+        word.repeated()
             .at_least(1)
             .collect::<Vec<String>>()
             .map_with(|words, e| spanned(words.join(" "), e.span())),
@@ -194,25 +190,21 @@ where
 
     // Date: "date year -1247, month 3, day 15, era "Third Age""
     let date_field = choice((
-        kw("year").ignore_then(integer).map(|n| {
-            let mut d = DateLiteral::default();
-            d.year = Some(n);
-            d
+        kw("year").ignore_then(integer).map(|n| DateLiteral {
+            year: Some(n),
+            ..Default::default()
         }),
-        kw("month").ignore_then(integer).map(|n| {
-            let mut d = DateLiteral::default();
-            d.month = Some(n as u32);
-            d
+        kw("month").ignore_then(integer).map(|n| DateLiteral {
+            month: Some(n as u32),
+            ..Default::default()
         }),
-        kw("day").ignore_then(integer).map(|n| {
-            let mut d = DateLiteral::default();
-            d.day = Some(n as u32);
-            d
+        kw("day").ignore_then(integer).map(|n| DateLiteral {
+            day: Some(n as u32),
+            ..Default::default()
         }),
-        kw("era").ignore_then(string_lit.clone()).map(|s| {
-            let mut d = DateLiteral::default();
-            d.era = Some(s);
-            d
+        kw("era").ignore_then(string_lit).map(|s| DateLiteral {
+            era: Some(s),
+            ..Default::default()
         }),
     ));
 
@@ -226,10 +218,18 @@ where
         .map(|fields| {
             let mut date = DateLiteral::default();
             for f in fields {
-                if f.year.is_some() { date.year = f.year; }
-                if f.month.is_some() { date.month = f.month; }
-                if f.day.is_some() { date.day = f.day; }
-                if f.era.is_some() { date.era = f.era; }
+                if f.year.is_some() {
+                    date.year = f.year;
+                }
+                if f.month.is_some() {
+                    date.month = f.month;
+                }
+                if f.day.is_some() {
+                    date.day = f.day;
+                }
+                if f.era.is_some() {
+                    date.era = f.era;
+                }
             }
             Statement::Date(date)
         })
@@ -243,18 +243,17 @@ where
     // Property: word value
     let property = word
         .then(value)
-        .map(|(key, val)| Statement::Property(Property { key, value: val.node }))
+        .map(|(key, val)| {
+            Statement::Property(Property {
+                key,
+                value: val.node,
+            })
+        })
         .labelled("property");
 
     // Statement: try alternatives in order
-    let statement = choice((
-        relationship,
-        exit_stmt,
-        date_stmt,
-        description,
-        property,
-    ))
-    .map_with(|stmt, e| spanned(stmt, e.span()));
+    let statement = choice((relationship, exit_stmt, date_stmt, description, property))
+        .map_with(|stmt, e| spanned(stmt, e.span()));
 
     // -- Block body: statements inside { } --
     let block_body = statement
@@ -285,8 +284,7 @@ where
         .map(|((name, kind), body)| Declaration::Entity(EntityDecl { name, kind, body }))
         .labelled("entity declaration");
 
-    let declaration = choice((world_decl, entity_decl))
-        .map_with(|decl, e| spanned(decl, e.span()));
+    let declaration = choice((world_decl, entity_decl)).map_with(|decl, e| spanned(decl, e.span()));
 
     // -- File --
     declaration
@@ -303,26 +301,22 @@ where
 // ---------------------------------------------------------------------------
 
 /// Parse a token stream into an AST.
-pub fn parse(
-    tokens: &[(Token, std::ops::Range<usize>)],
-) -> Result<SourceFile, Vec<ParseError>> {
+pub fn parse(tokens: &[(Token, std::ops::Range<usize>)]) -> Result<SourceFile, Vec<ParseError>> {
     let token_iter = tokens
         .iter()
         .map(|(tok, span)| (tok.clone(), Span::from(span.clone())));
 
     let len = tokens.last().map_or(0, |(_, s)| s.end);
     let eoi: Span = (len..len).into();
-    let stream = Stream::from_iter(token_iter)
-        .map(eoi, |(t, s): (_, _)| (t, s));
+    let stream = Stream::from_iter(token_iter).map(eoi, |(t, s): (_, _)| (t, s));
 
-    let (output, errors) = source_file_parser()
-        .parse(stream)
-        .into_output_errors();
+    let (output, errors) = source_file_parser().parse(stream).into_output_errors();
 
     if let Some(ast) = output
-        && errors.is_empty() {
-            return Ok(ast);
-        }
+        && errors.is_empty()
+    {
+        return Ok(ast);
+    }
 
     Err(errors
         .into_iter()
@@ -369,10 +363,9 @@ mod tests {
 
     #[test]
     fn parse_entity_declaration() {
-        let ast = parse_source(
-            "Kael Stormborn is a character {\n    species human\n    status alive\n}",
-        )
-        .unwrap();
+        let ast =
+            parse_source("Kael Stormborn is a character {\n    species human\n    status alive\n}")
+                .unwrap();
 
         assert_eq!(ast.declarations.len(), 1);
         match &ast.declarations[0].node {
@@ -387,8 +380,7 @@ mod tests {
 
     #[test]
     fn parse_entity_with_article_an() {
-        let ast =
-            parse_source("the Great Sundering is an event {\n    type cataclysm\n}").unwrap();
+        let ast = parse_source("the Great Sundering is an event {\n    type cataclysm\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => {
@@ -401,8 +393,8 @@ mod tests {
 
     #[test]
     fn parse_relationship_member_of() {
-        let ast = parse_source("Kael is a character {\n    member of the Order of Dawn\n}")
-            .unwrap();
+        let ast =
+            parse_source("Kael is a character {\n    member of the Order of Dawn\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => match &e.body[0].node {
@@ -418,8 +410,7 @@ mod tests {
 
     #[test]
     fn parse_relationship_in() {
-        let ast =
-            parse_source("the Citadel is a fortress {\n    in the Ashlands\n}").unwrap();
+        let ast = parse_source("the Citadel is a fortress {\n    in the Ashlands\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => match &e.body[0].node {
@@ -435,8 +426,8 @@ mod tests {
 
     #[test]
     fn parse_exit() {
-        let ast = parse_source("the Citadel is a fortress {\n    north to the Ashlands\n}")
-            .unwrap();
+        let ast =
+            parse_source("the Citadel is a fortress {\n    north to the Ashlands\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => match &e.body[0].node {
@@ -452,8 +443,8 @@ mod tests {
 
     #[test]
     fn parse_list_value() {
-        let ast = parse_source("Kael is a character {\n    traits [brave, stubborn, loyal]\n}")
-            .unwrap();
+        let ast =
+            parse_source("Kael is a character {\n    traits [brave, stubborn, loyal]\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => match &e.body[0].node {
@@ -566,8 +557,7 @@ the Citadel is a fortress {
 
     #[test]
     fn parse_integer_property() {
-        let ast = parse_source("the Citadel is a fortress {\n    population 45000\n}")
-            .unwrap();
+        let ast = parse_source("the Citadel is a fortress {\n    population 45000\n}").unwrap();
 
         match &ast.declarations[0].node {
             Declaration::Entity(e) => match &e.body[0].node {

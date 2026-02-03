@@ -143,8 +143,8 @@ mod tests {
     fn relationship_builder() {
         let src = EntityId::new();
         let tgt = EntityId::new();
-        let rel = Relationship::new(src, RelationshipKind::AlliedWith, tgt)
-            .with_label("trusted ally");
+        let rel =
+            Relationship::new(src, RelationshipKind::AlliedWith, tgt).with_label("trusted ally");
         assert!(rel.bidirectional);
         assert_eq!(rel.label.as_deref(), Some("trusted ally"));
     }

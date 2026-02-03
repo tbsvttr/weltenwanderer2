@@ -9,7 +9,11 @@ pub fn run(dir: &Path) -> Result<(), String> {
     let counts = world.entity_counts_by_kind();
     println!("  Compiled '{}' successfully.", world.meta.name);
     println!();
-    println!("  {} entities, {} relationships", world.entity_count(), world.relationship_count());
+    println!(
+        "  {} entities, {} relationships",
+        world.entity_count(),
+        world.relationship_count()
+    );
 
     if !counts.is_empty() {
         let mut sorted: Vec<_> = counts.iter().collect();

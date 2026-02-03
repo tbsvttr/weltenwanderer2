@@ -77,9 +77,8 @@ impl WwLanguageServer {
         let mut concatenated = String::new();
 
         for path in &file_paths {
-            let uri = Url::from_file_path(path).unwrap_or_else(|_| {
-                Url::parse(&format!("file://{}", path.display())).unwrap()
-            });
+            let uri = Url::from_file_path(path)
+                .unwrap_or_else(|_| Url::parse(&format!("file://{}", path.display())).unwrap());
 
             let text = if let Some(open_text) = open_docs.get(&uri) {
                 open_text.clone()
@@ -157,16 +156,17 @@ impl WwLanguageServer {
             // rather than just the first occurrence of the name.
             let def_pos = find_definition_offset(&concatenated, &entity.name);
             if let Some(global_start) = def_pos
-                && let Some(slice) = find_slice_for_offset(&slices, global_start) {
-                    let local_start = global_start - slice.offset;
-                    let local_end = local_start + entity.name.len();
-                    entities.push(EntityInfo {
-                        name: entity.name.clone(),
-                        kind: entity.kind.to_string(),
-                        local_span: local_start..local_end,
-                        uri: slice.uri.clone(),
-                    });
-                }
+                && let Some(slice) = find_slice_for_offset(&slices, global_start)
+            {
+                let local_start = global_start - slice.offset;
+                let local_end = local_start + entity.name.len();
+                entities.push(EntityInfo {
+                    name: entity.name.clone(),
+                    kind: entity.kind.to_string(),
+                    local_span: local_start..local_end,
+                    uri: slice.uri.clone(),
+                });
+            }
         }
 
         // Update state
@@ -194,9 +194,12 @@ fn collect_ww_files(dir: &PathBuf, out: &mut Vec<PathBuf>) {
         if path.is_dir() {
             // Skip hidden directories and common non-source dirs
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && !name.starts_with('.') && name != "target" && name != "node_modules" {
-                    collect_ww_files(&path, out);
-                }
+                && !name.starts_with('.')
+                && name != "target"
+                && name != "node_modules"
+            {
+                collect_ww_files(&path, out);
+            }
         } else if path.extension().is_some_and(|ext| ext == "ww") {
             out.push(path);
         }
@@ -204,7 +207,10 @@ fn collect_ww_files(dir: &PathBuf, out: &mut Vec<PathBuf>) {
 }
 
 /// Find which file slice a byte span falls into.
-fn find_slice_for_span<'a>(slices: &'a [FileSlice], span: &std::ops::Range<usize>) -> Option<&'a FileSlice> {
+fn find_slice_for_span<'a>(
+    slices: &'a [FileSlice],
+    span: &std::ops::Range<usize>,
+) -> Option<&'a FileSlice> {
     find_slice_for_offset(slices, span.start)
 }
 
@@ -324,12 +330,7 @@ impl LanguageServer for WwLanguageServer {
             .as_ref()
             .and_then(|folders| folders.first())
             .and_then(|f| f.uri.to_file_path().ok())
-            .or_else(|| {
-                params
-                    .root_uri
-                    .as_ref()
-                    .and_then(|u| u.to_file_path().ok())
-            });
+            .or_else(|| params.root_uri.as_ref().and_then(|u| u.to_file_path().ok()));
 
         if let Some(root) = root {
             let mut state = self.state.write().await;
@@ -377,9 +378,10 @@ impl LanguageServer for WwLanguageServer {
             // If no workspace root set yet, derive it from the file's parent directory
             if state.root.is_none()
                 && let Ok(path) = uri.to_file_path()
-                    && let Some(parent) = path.parent() {
-                        state.root = Some(parent.to_path_buf());
-                    }
+                && let Some(parent) = path.parent()
+            {
+                state.root = Some(parent.to_path_buf());
+            }
 
             state.open_docs.insert(uri, text);
         }
@@ -479,10 +481,8 @@ impl LanguageServer for WwLanguageServer {
                 let start = search_from + found;
                 let end = start + entity.name.len();
                 if offset >= start && offset <= end {
-                    let def_range = byte_span_to_range(
-                        &get_file_text(&state, &entity.uri),
-                        &entity.local_span,
-                    );
+                    let def_range =
+                        byte_span_to_range(&get_file_text(&state, &entity.uri), &entity.local_span);
                     return Ok(Some(GotoDefinitionResponse::Scalar(Location {
                         uri: entity.uri.clone(),
                         range: def_range,
@@ -555,9 +555,10 @@ fn get_file_text(state: &WorkspaceState, uri: &Url) -> String {
         return text.clone();
     }
     if let Ok(path) = uri.to_file_path()
-        && let Ok(text) = std::fs::read_to_string(path) {
-            return text;
-        }
+        && let Ok(text) = std::fs::read_to_string(path)
+    {
+        return text;
+    }
     String::new()
 }
 

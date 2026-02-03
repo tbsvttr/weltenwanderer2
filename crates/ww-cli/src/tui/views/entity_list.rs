@@ -46,12 +46,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Blue)),
         )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .fg(Color::White)
-                .bold(),
-        )
+        .highlight_style(Style::default().bg(Color::DarkGray).fg(Color::White).bold())
         .highlight_symbol("▶ ");
 
     let mut state = ListState::default();

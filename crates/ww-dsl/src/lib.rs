@@ -47,16 +47,15 @@ pub fn compile_dir(dir: &Path) -> CompileResult {
     let mut entries: Vec<_> = match std::fs::read_dir(dir) {
         Ok(entries) => entries
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .is_some_and(|ext| ext == "ww")
-            })
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ww"))
             .collect(),
         Err(e) => {
             return CompileResult {
                 world: ww_core::World::new(ww_core::WorldMeta::new("Error")),
-                diagnostics: vec![Diagnostic::error(0..0, format!("cannot read directory: {e}"))],
+                diagnostics: vec![Diagnostic::error(
+                    0..0,
+                    format!("cannot read directory: {e}"),
+                )],
             };
         }
     };

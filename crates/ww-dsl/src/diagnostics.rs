@@ -67,8 +67,7 @@ pub fn render_diagnostics(source: &str, filename: &str, diagnostics: &[Diagnosti
         };
 
         let span = (filename, diag.span.clone());
-        let mut report = Report::build(kind, span)
-            .with_message(&diag.message);
+        let mut report = Report::build(kind, span).with_message(&diag.message);
 
         let label_text = diag.label.as_deref().unwrap_or(&diag.message);
         report = report.with_label(
@@ -99,8 +98,10 @@ mod tests {
     #[test]
     fn render_produces_output() {
         let source = "Kael is a character {\n    member of Unknown\n}";
-        let diags = vec![Diagnostic::error(35..42, "undefined entity reference")
-            .with_label("not defined anywhere")];
+        let diags = vec![
+            Diagnostic::error(35..42, "undefined entity reference")
+                .with_label("not defined anywhere"),
+        ];
         let output = render_diagnostics(source, "test.ww", &diags);
         assert!(!output.is_empty());
         assert!(output.contains("undefined entity reference"));

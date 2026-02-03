@@ -100,27 +100,25 @@ impl<'w> QueryBuilder<'w> {
     fn matches(&self, entity: &Entity) -> bool {
         // Kind filter
         if let Some(ref kind) = self.kind_filter
-            && entity.kind != *kind {
-                return false;
-            }
+            && entity.kind != *kind
+        {
+            return false;
+        }
 
         // Tag filters (all must match)
         for tag in &self.tag_filters {
             let tag_lower = tag.to_lowercase();
-            if !entity
-                .tags
-                .iter()
-                .any(|t| t.to_lowercase() == tag_lower)
-            {
+            if !entity.tags.iter().any(|t| t.to_lowercase() == tag_lower) {
                 return false;
             }
         }
 
         // Name contains
         if let Some(ref s) = self.name_contains
-            && !entity.name.to_lowercase().contains(s) {
-                return false;
-            }
+            && !entity.name.to_lowercase().contains(s)
+        {
+            return false;
+        }
 
         // Related to
         if let Some(related_id) = self.related_to {
@@ -137,9 +135,10 @@ impl<'w> QueryBuilder<'w> {
 
         // Has property
         if let Some(ref key) = self.has_property
-            && !entity.properties.contains_key(key) {
-                return false;
-            }
+            && !entity.properties.contains_key(key)
+        {
+            return false;
+        }
 
         true
     }
