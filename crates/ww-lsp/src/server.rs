@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,7 +9,11 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
+use ww_dsl::ast::{Declaration, SourceFile, Statement};
 use ww_dsl::diagnostics::Severity;
+use ww_dsl::lexer::Token;
+use ww_dsl::resolver::{Resolver, SourceMap};
+use ww_dsl::{compiler, lexer, parser};
 
 /// Tracks where each file's content sits within the concatenated source.
 struct FileSlice {
@@ -37,6 +43,18 @@ struct WorkspaceState {
     entity_names: Vec<String>,
     /// Workspace root path.
     root: Option<PathBuf>,
+    /// Parsed AST from the last compilation.
+    ast: Option<SourceFile>,
+    /// Lexed tokens with spans from the last compilation.
+    tokens: Option<Vec<(Token, std::ops::Range<usize>)>>,
+    /// File slices for mapping global offsets to per-file locations.
+    slices: Vec<FileSlice>,
+    /// Concatenated source text from all .ww files.
+    concatenated_source: String,
+    /// Source map for the ww-dsl compiler.
+    source_map: Option<SourceMap>,
+    /// Hash of the last compiled source (for incremental compilation).
+    last_source_hash: u64,
 }
 
 pub struct WwLanguageServer {
@@ -53,6 +71,12 @@ impl WwLanguageServer {
                 entities: Vec::new(),
                 entity_names: Vec::new(),
                 root: None,
+                ast: None,
+                tokens: None,
+                slices: Vec::new(),
+                concatenated_source: String::new(),
+                source_map: None,
+                last_source_hash: 0,
             })),
         }
     }
@@ -65,6 +89,7 @@ impl WwLanguageServer {
             None => return,
         };
         let open_docs = state.open_docs.clone();
+        let last_hash = state.last_source_hash;
         drop(state);
 
         // Discover all .ww files recursively
@@ -72,9 +97,10 @@ impl WwLanguageServer {
         collect_ww_files(&root, &mut file_paths);
         file_paths.sort();
 
-        // Build file slices: use open doc text if available, otherwise read from disk
+        // Build file slices + SourceMap
         let mut slices: Vec<FileSlice> = Vec::new();
         let mut concatenated = String::new();
+        let mut dsl_source_map = SourceMap::new();
 
         for path in &file_paths {
             let uri = match Url::from_file_path(path) {
@@ -102,6 +128,12 @@ impl WwLanguageServer {
             let offset = concatenated.len();
             concatenated.push_str(&text);
 
+            let file_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.display().to_string());
+            dsl_source_map.add_file(file_name, offset, len);
+
             slices.push(FileSlice {
                 uri,
                 offset,
@@ -114,40 +146,53 @@ impl WwLanguageServer {
             return;
         }
 
-        // Compile the whole workspace as one source
-        let result = ww_dsl::compile_source(&concatenated);
-
-        // Map diagnostics back to per-file
-        let mut per_file_diags: HashMap<Url, Vec<Diagnostic>> = HashMap::new();
-        // Initialize empty diagnostics for all files (to clear old errors)
-        for slice in &slices {
-            per_file_diags.entry(slice.uri.clone()).or_default();
+        // Incremental compilation: skip if source unchanged
+        let mut hasher = DefaultHasher::new();
+        concatenated.hash(&mut hasher);
+        let source_hash = hasher.finish();
+        if source_hash == last_hash && last_hash != 0 {
+            return;
         }
 
-        for diag in &result.diagnostics {
-            if let Some(slice) = find_slice_for_span(&slices, &diag.span) {
-                let local_start = diag.span.start.saturating_sub(slice.offset);
-                let local_end = diag.span.end.saturating_sub(slice.offset).min(slice.len);
-                let local_span = local_start..local_end;
+        // Step-by-step pipeline (matching compile_with_source_map in ww-dsl)
+        let (tokens, lex_errors) = lexer::lex(&concatenated);
 
-                let range = byte_span_to_range(&slice.text, &local_span);
-                let severity = match diag.severity {
-                    Severity::Error => Some(DiagnosticSeverity::ERROR),
-                    Severity::Warning => Some(DiagnosticSeverity::WARNING),
-                };
+        let mut diagnostics: Vec<ww_dsl::Diagnostic> = lex_errors
+            .into_iter()
+            .map(|e| ww_dsl::Diagnostic::error(e.span, e.message))
+            .collect();
 
-                per_file_diags
-                    .entry(slice.uri.clone())
-                    .or_default()
-                    .push(Diagnostic {
-                        range,
-                        severity,
-                        source: Some("ww".into()),
-                        message: diag.message.clone(),
-                        ..Default::default()
-                    });
+        let ast = match parser::parse(&tokens) {
+            Ok(ast) => ast,
+            Err(parse_errors) => {
+                diagnostics.extend(
+                    parse_errors
+                        .into_iter()
+                        .map(|e| ww_dsl::Diagnostic::error(e.span, e.message)),
+                );
+                let per_file_diags = map_diagnostics_to_files(&slices, &diagnostics);
+                for (uri, diags) in per_file_diags {
+                    self.client.publish_diagnostics(uri, diags, None).await;
+                }
+                // Store partial state (no AST) so other features degrade gracefully
+                let mut state = self.state.write().await;
+                state.slices = slices;
+                state.concatenated_source = concatenated;
+                state.source_map = Some(dsl_source_map);
+                state.tokens = Some(tokens);
+                state.ast = None;
+                state.last_source_hash = source_hash;
+                return;
             }
-        }
+        };
+
+        let resolver = Resolver::resolve(&ast, &dsl_source_map);
+        let mut result = compiler::compile(&ast, &resolver, dsl_source_map);
+
+        diagnostics.append(&mut result.diagnostics);
+        result.diagnostics = diagnostics;
+
+        let per_file_diags = map_diagnostics_to_files(&slices, &result.diagnostics);
 
         // Build entity info
         let mut entities = Vec::new();
@@ -156,9 +201,6 @@ impl WwLanguageServer {
         for entity in result.world.all_entities() {
             entity_names.push(entity.name.clone());
 
-            // Find the entity *definition* (the "Name is a/an kind" line)
-            // by searching for "<name> is a" or "<name> is an" pattern,
-            // rather than just the first occurrence of the name.
             let def_pos = find_definition_offset(&concatenated, &entity.name);
             if let Some(global_start) = def_pos
                 && let Some(slice) = find_slice_for_offset(&slices, global_start)
@@ -174,11 +216,17 @@ impl WwLanguageServer {
             }
         }
 
-        // Update state
+        // Update state with all compilation artifacts
         {
             let mut state = self.state.write().await;
             state.entities = entities;
             state.entity_names = entity_names;
+            state.ast = Some(ast);
+            state.tokens = Some(tokens);
+            state.slices = slices;
+            state.concatenated_source = concatenated;
+            state.source_map = Some(result.source_map);
+            state.last_source_hash = source_hash;
         }
 
         // Publish diagnostics for each file
@@ -276,6 +324,317 @@ fn position_to_byte_offset(text: &str, pos: Position) -> usize {
     text.len()
 }
 
+/// Map DSL diagnostics to per-file LSP diagnostics.
+fn map_diagnostics_to_files(
+    slices: &[FileSlice],
+    diagnostics: &[ww_dsl::Diagnostic],
+) -> HashMap<Url, Vec<Diagnostic>> {
+    let mut per_file: HashMap<Url, Vec<Diagnostic>> = HashMap::new();
+    for slice in slices {
+        per_file.entry(slice.uri.clone()).or_default();
+    }
+    for diag in diagnostics {
+        if let Some(slice) = find_slice_for_span(slices, &diag.span) {
+            let local_start = diag.span.start.saturating_sub(slice.offset);
+            let local_end = diag.span.end.saturating_sub(slice.offset).min(slice.len);
+            let local_span = local_start..local_end;
+            let range = byte_span_to_range(&slice.text, &local_span);
+            let severity = match diag.severity {
+                Severity::Error => Some(DiagnosticSeverity::ERROR),
+                Severity::Warning => Some(DiagnosticSeverity::WARNING),
+            };
+            per_file
+                .entry(slice.uri.clone())
+                .or_default()
+                .push(Diagnostic {
+                    range,
+                    severity,
+                    source: Some("ww".into()),
+                    message: diag.message.clone(),
+                    ..Default::default()
+                });
+        }
+    }
+    per_file
+}
+
+/// Map an entity kind string to an LSP SymbolKind.
+fn entity_kind_to_symbol_kind(kind: &str) -> SymbolKind {
+    match kind.to_lowercase().as_str() {
+        "character" => SymbolKind::CLASS,
+        "location" | "fortress" | "city" | "town" | "village" | "region" | "continent" | "room"
+        | "wilderness" | "dungeon" | "building" | "landmark" | "plane" => SymbolKind::NAMESPACE,
+        "faction" => SymbolKind::STRUCT,
+        "event" => SymbolKind::EVENT,
+        "item" => SymbolKind::OBJECT,
+        "lore" => SymbolKind::FILE,
+        _ => SymbolKind::VARIABLE,
+    }
+}
+
+/// Find the entity name at the cursor position, preferring longer names.
+fn entity_at_cursor(state: &WorkspaceState, uri: &Url, pos: Position) -> Option<String> {
+    let text = get_file_text(state, uri);
+    let offset = position_to_byte_offset(&text, pos);
+    let text_lower = text.to_lowercase();
+
+    let mut names: Vec<&String> = state.entity_names.iter().collect();
+    names.sort_by_key(|b| std::cmp::Reverse(b.len()));
+
+    for name in names {
+        let name_lower = name.to_lowercase();
+        let mut search_from = 0;
+        while let Some(found) = text_lower[search_from..].find(&name_lower) {
+            let start = search_from + found;
+            let end = start + name.len();
+            if offset >= start && offset <= end {
+                return Some(name.clone());
+            }
+            search_from = start + 1;
+        }
+    }
+    None
+}
+
+/// Find all references to an entity in the AST (definitions + references).
+/// Returns (global_byte_span, is_definition) pairs.
+fn find_all_entity_references(ast: &SourceFile, name: &str) -> Vec<(std::ops::Range<usize>, bool)> {
+    let name_lower = name.to_lowercase();
+    let mut refs = Vec::new();
+
+    for decl in &ast.declarations {
+        let body = match &decl.node {
+            Declaration::Entity(entity) => {
+                if entity.name.node.to_lowercase() == name_lower {
+                    refs.push((entity.name.span.clone(), true));
+                }
+                &entity.body
+            }
+            Declaration::World(world) => &world.body,
+        };
+
+        for stmt in body {
+            match &stmt.node {
+                Statement::Relationship(rel) => {
+                    for target in &rel.targets {
+                        if target.node.to_lowercase() == name_lower {
+                            refs.push((target.span.clone(), false));
+                        }
+                    }
+                }
+                Statement::Exit(exit) => {
+                    if exit.target.node.to_lowercase() == name_lower {
+                        refs.push((exit.target.span.clone(), false));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    refs
+}
+
+/// Convert a global byte span to an LSP Location using file slices.
+fn global_span_to_location(
+    slices: &[FileSlice],
+    span: &std::ops::Range<usize>,
+) -> Option<Location> {
+    let slice = find_slice_for_span(slices, span)?;
+    let local_start = span.start.saturating_sub(slice.offset);
+    let local_end = span.end.saturating_sub(slice.offset).min(slice.len);
+    let range = byte_span_to_range(&slice.text, &(local_start..local_end));
+    Some(Location {
+        uri: slice.uri.clone(),
+        range,
+    })
+}
+
+/// Get the text of the current line up to the cursor position.
+fn get_line_prefix(text: &str, pos: Position) -> String {
+    for (i, line) in text.lines().enumerate() {
+        if i == pos.line as usize {
+            let char_idx = (pos.character as usize).min(line.len());
+            return line[..char_idx].to_string();
+        }
+    }
+    String::new()
+}
+
+/// Completion context detected from the line prefix.
+#[derive(Debug)]
+enum WwCompletionCtx {
+    /// After "is a" / "is an" — suggest entity kinds.
+    EntityKind,
+    /// After a relationship keyword — suggest entity names.
+    RelationshipTarget,
+    /// Inside entity body on a new/partial line — suggest properties + relationships.
+    EntityBody,
+    /// After a known property key — suggest values.
+    PropertyValue(String),
+    /// Default context — suggest everything.
+    Default,
+}
+
+/// Detect the completion context from the text before the cursor.
+fn detect_completion_context(line_prefix: &str) -> WwCompletionCtx {
+    let lower = line_prefix.to_lowercase();
+    let trimmed_lower = lower.trim_end();
+
+    if trimmed_lower.ends_with("is a") || trimmed_lower.ends_with("is an") {
+        return WwCompletionCtx::EntityKind;
+    }
+
+    let rel_keywords = [
+        "member of",
+        "located at",
+        "allied with",
+        "rival of",
+        "owned by",
+        "led by",
+        "based at",
+        "involving",
+        "references",
+        "caused by",
+        "north to",
+        "south to",
+        "east to",
+        "west to",
+        "up to",
+        "down to",
+    ];
+    for kw in &rel_keywords {
+        if trimmed_lower.ends_with(kw) {
+            return WwCompletionCtx::RelationshipTarget;
+        }
+    }
+
+    let property_keys = [
+        "species",
+        "occupation",
+        "status",
+        "climate",
+        "population",
+        "terrain",
+        "type",
+        "rarity",
+        "source",
+        "alignment",
+        "traits",
+        "values",
+    ];
+    for key in &property_keys {
+        if trimmed_lower.ends_with(key) {
+            return WwCompletionCtx::PropertyValue(key.to_string());
+        }
+    }
+
+    let trimmed = line_prefix.trim();
+    if line_prefix.starts_with(|c: char| c.is_whitespace())
+        && (trimmed.is_empty() || !trimmed.contains(' '))
+    {
+        return WwCompletionCtx::EntityBody;
+    }
+
+    WwCompletionCtx::Default
+}
+
+/// Classify a token for semantic highlighting. Returns None to skip.
+fn classify_token(token: &Token, next: Option<&Token>) -> Option<u32> {
+    match token {
+        Token::Word(w) if is_semantic_keyword(w) => Some(0), // KEYWORD
+        Token::Word(_) if next.is_some_and(is_value_start) => Some(2), // PROPERTY
+        Token::Str(_) => Some(3),                            // STRING
+        Token::Integer(_) | Token::Float(_) => Some(4),      // NUMBER
+        Token::DocString(_) => Some(5),                      // COMMENT
+        Token::LBrace | Token::RBrace | Token::LBracket | Token::RBracket | Token::Comma => {
+            Some(6) // OPERATOR
+        }
+        _ => None,
+    }
+}
+
+/// Check if a word is a DSL keyword for semantic highlighting.
+fn is_semantic_keyword(word: &str) -> bool {
+    matches!(
+        word.to_lowercase().as_str(),
+        "world"
+            | "is"
+            | "a"
+            | "an"
+            | "member"
+            | "of"
+            | "located"
+            | "at"
+            | "allied"
+            | "with"
+            | "rival"
+            | "owned"
+            | "by"
+            | "led"
+            | "based"
+            | "involving"
+            | "references"
+            | "caused"
+            | "in"
+            | "north"
+            | "south"
+            | "east"
+            | "west"
+            | "up"
+            | "down"
+            | "to"
+            | "date"
+            | "year"
+            | "month"
+            | "day"
+            | "era"
+    )
+}
+
+/// Check if a token can start a property value.
+fn is_value_start(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Str(_) | Token::Integer(_) | Token::Float(_) | Token::LBracket | Token::Word(_)
+    )
+}
+
+/// Collect all byte spans where entity names appear in the text.
+fn collect_entity_name_spans(text: &str, entity_names: &[String]) -> Vec<std::ops::Range<usize>> {
+    let text_lower = text.to_lowercase();
+    let mut spans = Vec::new();
+    for name in entity_names {
+        let name_lower = name.to_lowercase();
+        let mut search_from = 0;
+        while let Some(found) = text_lower[search_from..].find(&name_lower) {
+            let start = search_from + found;
+            let end = start + name.len();
+            spans.push(start..end);
+            search_from = start + 1;
+        }
+    }
+    spans
+}
+
+/// Check if a token span falls within any entity name span.
+fn is_in_entity_span(
+    entity_spans: &[std::ops::Range<usize>],
+    token_span: &std::ops::Range<usize>,
+) -> bool {
+    entity_spans
+        .iter()
+        .any(|s| token_span.start >= s.start && token_span.end <= s.end)
+}
+
+/// Extract an entity name from an "undefined entity" diagnostic message.
+fn extract_entity_name_from_diagnostic(msg: &str) -> Option<&str> {
+    let prefix = "undefined entity: \"";
+    let start = msg.find(prefix)? + prefix.len();
+    let end = start + msg[start..].find('"')?;
+    Some(&msg[start..end])
+}
+
 static KEYWORDS: &[&str] = &[
     "world",
     "is",
@@ -353,6 +712,34 @@ impl LanguageServer for WwLanguageServer {
                 }),
                 definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                references_provider: Some(OneOf::Left(true)),
+                rename_provider: Some(OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                })),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: vec![
+                                    SemanticTokenType::KEYWORD,
+                                    SemanticTokenType::TYPE,
+                                    SemanticTokenType::PROPERTY,
+                                    SemanticTokenType::STRING,
+                                    SemanticTokenType::NUMBER,
+                                    SemanticTokenType::COMMENT,
+                                    SemanticTokenType::OPERATOR,
+                                ],
+                                token_modifiers: vec![],
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: None,
+                            work_done_progress_options: WorkDoneProgressOptions::default(),
+                        },
+                    ),
+                ),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 ..Default::default()
             },
             ..Default::default()
@@ -418,30 +805,167 @@ impl LanguageServer for WwLanguageServer {
         self.analyze_workspace().await;
     }
 
-    async fn completion(&self, _params: CompletionParams) -> Result<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+
         let state = self.state.read().await;
+
+        let text = get_file_text(&state, &uri);
+        let line_prefix = get_line_prefix(&text, pos);
+        let context = detect_completion_context(&line_prefix);
 
         let mut items = Vec::new();
 
-        // Add entity names as completions (from entire workspace)
-        for (i, name) in state.entity_names.iter().enumerate() {
-            items.push(CompletionItem {
-                label: name.clone(),
-                kind: Some(CompletionItemKind::REFERENCE),
-                sort_text: Some(format!("0{:04}", i)),
-                detail: Some("entity".into()),
-                ..Default::default()
-            });
-        }
-
-        // Add keywords
-        for (i, kw) in KEYWORDS.iter().enumerate() {
-            items.push(CompletionItem {
-                label: (*kw).to_string(),
-                kind: Some(CompletionItemKind::KEYWORD),
-                sort_text: Some(format!("1{:04}", i)),
-                ..Default::default()
-            });
+        match context {
+            WwCompletionCtx::EntityKind => {
+                let kinds = [
+                    "character",
+                    "location",
+                    "fortress",
+                    "city",
+                    "town",
+                    "village",
+                    "region",
+                    "continent",
+                    "room",
+                    "wilderness",
+                    "dungeon",
+                    "building",
+                    "landmark",
+                    "plane",
+                    "faction",
+                    "event",
+                    "item",
+                    "lore",
+                ];
+                for (i, kind) in kinds.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: kind.to_string(),
+                        kind: Some(CompletionItemKind::TYPE_PARAMETER),
+                        sort_text: Some(format!("0{:04}", i)),
+                        detail: Some("entity kind".into()),
+                        ..Default::default()
+                    });
+                }
+            }
+            WwCompletionCtx::RelationshipTarget => {
+                for (i, name) in state.entity_names.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: name.clone(),
+                        kind: Some(CompletionItemKind::REFERENCE),
+                        sort_text: Some(format!("0{:04}", i)),
+                        detail: Some("entity".into()),
+                        ..Default::default()
+                    });
+                }
+            }
+            WwCompletionCtx::EntityBody => {
+                let property_keys = [
+                    "species",
+                    "occupation",
+                    "status",
+                    "climate",
+                    "population",
+                    "terrain",
+                    "type",
+                    "rarity",
+                    "source",
+                    "alignment",
+                    "traits",
+                    "values",
+                ];
+                for (i, key) in property_keys.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: key.to_string(),
+                        kind: Some(CompletionItemKind::PROPERTY),
+                        sort_text: Some(format!("0{:04}", i)),
+                        detail: Some("property".into()),
+                        ..Default::default()
+                    });
+                }
+                let rel_keywords = [
+                    "member of",
+                    "located at",
+                    "allied with",
+                    "rival of",
+                    "owned by",
+                    "led by",
+                    "based at",
+                    "in",
+                    "involving",
+                    "references",
+                    "caused by",
+                    "north to",
+                    "south to",
+                    "east to",
+                    "west to",
+                    "up to",
+                    "down to",
+                ];
+                for (i, kw) in rel_keywords.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: kw.to_string(),
+                        kind: Some(CompletionItemKind::KEYWORD),
+                        sort_text: Some(format!("1{:04}", i)),
+                        detail: Some("relationship".into()),
+                        ..Default::default()
+                    });
+                }
+                items.push(CompletionItem {
+                    label: "date".to_string(),
+                    kind: Some(CompletionItemKind::KEYWORD),
+                    sort_text: Some("19999".into()),
+                    detail: Some("date literal".into()),
+                    ..Default::default()
+                });
+            }
+            WwCompletionCtx::PropertyValue(ref key) => {
+                let values: &[&str] = match key.as_str() {
+                    "species" => &["human", "elf", "dwarf", "halfling", "orc", "goblin"],
+                    "status" => &["alive", "dead", "missing", "unknown"],
+                    "alignment" => &["good", "evil", "neutral", "lawful", "chaotic"],
+                    "climate" => &["arid", "temperate", "tropical", "arctic", "desert"],
+                    "terrain" => &[
+                        "mountain",
+                        "forest",
+                        "plains",
+                        "swamp",
+                        "coastal",
+                        "underground",
+                    ],
+                    "rarity" => &["common", "uncommon", "rare", "legendary", "unique"],
+                    _ => &[],
+                };
+                for (i, val) in values.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: val.to_string(),
+                        kind: Some(CompletionItemKind::VALUE),
+                        sort_text: Some(format!("0{:04}", i)),
+                        detail: Some(format!("{key} value")),
+                        ..Default::default()
+                    });
+                }
+            }
+            WwCompletionCtx::Default => {
+                for (i, name) in state.entity_names.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: name.clone(),
+                        kind: Some(CompletionItemKind::REFERENCE),
+                        sort_text: Some(format!("0{:04}", i)),
+                        detail: Some("entity".into()),
+                        ..Default::default()
+                    });
+                }
+                for (i, kw) in KEYWORDS.iter().enumerate() {
+                    items.push(CompletionItem {
+                        label: (*kw).to_string(),
+                        kind: Some(CompletionItemKind::KEYWORD),
+                        sort_text: Some(format!("1{:04}", i)),
+                        ..Default::default()
+                    });
+                }
+            }
         }
 
         Ok(Some(CompletionResponse::Array(items)))
@@ -551,6 +1075,320 @@ impl LanguageServer for WwLanguageServer {
         }
 
         Ok(None)
+    }
+
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
+        let uri = params.text_document.uri;
+        let state = self.state.read().await;
+
+        let ast = match &state.ast {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+
+        let file_slice = match state.slices.iter().find(|s| s.uri == uri) {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let mut symbols = Vec::new();
+
+        for decl in &ast.declarations {
+            match &decl.node {
+                Declaration::Entity(entity) => {
+                    let name_start = entity.name.span.start;
+                    if name_start >= file_slice.offset
+                        && name_start < file_slice.offset + file_slice.len
+                    {
+                        let local_name_start = name_start - file_slice.offset;
+                        let local_name_end = entity.name.span.end - file_slice.offset;
+                        let local_decl_start = decl.span.start.saturating_sub(file_slice.offset);
+                        let local_decl_end = decl
+                            .span
+                            .end
+                            .saturating_sub(file_slice.offset)
+                            .min(file_slice.len);
+
+                        let selection_range = byte_span_to_range(
+                            &file_slice.text,
+                            &(local_name_start..local_name_end),
+                        );
+                        let range = byte_span_to_range(
+                            &file_slice.text,
+                            &(local_decl_start..local_decl_end),
+                        );
+
+                        #[allow(deprecated)]
+                        symbols.push(DocumentSymbol {
+                            name: entity.name.node.clone(),
+                            detail: Some(entity.kind.node.clone()),
+                            kind: entity_kind_to_symbol_kind(&entity.kind.node),
+                            tags: None,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: None,
+                        });
+                    }
+                }
+                Declaration::World(world) => {
+                    let name_start = world.name.span.start;
+                    if name_start >= file_slice.offset
+                        && name_start < file_slice.offset + file_slice.len
+                    {
+                        let local_name_start = name_start - file_slice.offset;
+                        let local_name_end = world.name.span.end - file_slice.offset;
+                        let local_decl_start = decl.span.start.saturating_sub(file_slice.offset);
+                        let local_decl_end = decl
+                            .span
+                            .end
+                            .saturating_sub(file_slice.offset)
+                            .min(file_slice.len);
+
+                        let selection_range = byte_span_to_range(
+                            &file_slice.text,
+                            &(local_name_start..local_name_end),
+                        );
+                        let range = byte_span_to_range(
+                            &file_slice.text,
+                            &(local_decl_start..local_decl_end),
+                        );
+
+                        #[allow(deprecated)]
+                        symbols.push(DocumentSymbol {
+                            name: world.name.node.clone(),
+                            detail: Some("world".to_string()),
+                            kind: SymbolKind::NAMESPACE,
+                            tags: None,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(Some(DocumentSymbolResponse::Nested(symbols)))
+    }
+
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+        let uri = params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+        let include_declaration = params.context.include_declaration;
+
+        let state = self.state.read().await;
+        let ast = match &state.ast {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+
+        let entity_name = match entity_at_cursor(&state, &uri, pos) {
+            Some(n) => n,
+            None => return Ok(None),
+        };
+
+        let all_refs = find_all_entity_references(ast, &entity_name);
+
+        let mut locations = Vec::new();
+        for (span, is_def) in &all_refs {
+            if !include_declaration && *is_def {
+                continue;
+            }
+            if let Some(loc) = global_span_to_location(&state.slices, span) {
+                locations.push(loc);
+            }
+        }
+
+        if locations.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(locations))
+        }
+    }
+
+    async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> Result<Option<PrepareRenameResponse>> {
+        let uri = params.text_document.uri;
+        let pos = params.position;
+
+        let state = self.state.read().await;
+
+        let entity_name = match entity_at_cursor(&state, &uri, pos) {
+            Some(n) => n,
+            None => return Ok(None),
+        };
+
+        let text = get_file_text(&state, &uri);
+        let offset = position_to_byte_offset(&text, pos);
+        let text_lower = text.to_lowercase();
+        let name_lower = entity_name.to_lowercase();
+
+        let mut search_from = 0;
+        while let Some(found) = text_lower[search_from..].find(&name_lower) {
+            let start = search_from + found;
+            let end = start + entity_name.len();
+            if offset >= start && offset <= end {
+                let range = byte_span_to_range(&text, &(start..end));
+                return Ok(Some(PrepareRenameResponse::Range(range)));
+            }
+            search_from = start + 1;
+        }
+
+        Ok(None)
+    }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let uri = params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+        let new_name = params.new_name;
+
+        let state = self.state.read().await;
+        let ast = match &state.ast {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+
+        let entity_name = match entity_at_cursor(&state, &uri, pos) {
+            Some(n) => n,
+            None => return Ok(None),
+        };
+
+        let all_refs = find_all_entity_references(ast, &entity_name);
+
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        for (span, _) in &all_refs {
+            if let Some(loc) = global_span_to_location(&state.slices, span) {
+                changes.entry(loc.uri).or_default().push(TextEdit {
+                    range: loc.range,
+                    new_text: new_name.clone(),
+                });
+            }
+        }
+
+        if changes.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(WorkspaceEdit {
+                changes: Some(changes),
+                ..Default::default()
+            }))
+        }
+    }
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri;
+        let state = self.state.read().await;
+
+        let text = get_file_text(&state, &uri);
+        if text.is_empty() {
+            return Ok(None);
+        }
+
+        let (tokens, _) = lexer::lex(&text);
+        let entity_spans = collect_entity_name_spans(&text, &state.entity_names);
+
+        let mut semantic_tokens = Vec::new();
+        let mut prev_line = 0u32;
+        let mut prev_start = 0u32;
+
+        for (i, (token, span)) in tokens.iter().enumerate() {
+            if matches!(token, Token::Newline) {
+                continue;
+            }
+
+            let token_type = if is_in_entity_span(&entity_spans, span) {
+                Some(1) // TYPE
+            } else {
+                classify_token(token, tokens.get(i + 1).map(|(t, _)| t))
+            };
+
+            let token_type = match token_type {
+                Some(t) => t,
+                None => continue,
+            };
+
+            let pos = byte_offset_to_position(&text, span.start);
+            let length = (span.end - span.start) as u32;
+
+            let delta_line = pos.line - prev_line;
+            let delta_start = if delta_line == 0 {
+                pos.character - prev_start
+            } else {
+                pos.character
+            };
+
+            semantic_tokens.push(SemanticToken {
+                delta_line,
+                delta_start,
+                length,
+                token_type,
+                token_modifiers_bitset: 0,
+            });
+
+            prev_line = pos.line;
+            prev_start = pos.character;
+        }
+
+        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data: semantic_tokens,
+        })))
+    }
+
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let uri = params.text_document.uri;
+        let mut actions = Vec::new();
+
+        for diag in &params.context.diagnostics {
+            if let Some(entity_name) = extract_entity_name_from_diagnostic(&diag.message) {
+                let state = self.state.read().await;
+                let text = get_file_text(&state, &uri);
+                drop(state);
+
+                let stub = format!(
+                    "\n{entity_name} is a character {{\n    -- TODO: fill in details\n}}\n"
+                );
+
+                let end_pos = byte_offset_to_position(&text, text.len());
+                let edit = TextEdit {
+                    range: Range {
+                        start: end_pos,
+                        end: end_pos,
+                    },
+                    new_text: stub,
+                };
+
+                let mut changes = HashMap::new();
+                changes.insert(uri.clone(), vec![edit]);
+
+                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                    title: format!("Create entity \"{entity_name}\""),
+                    kind: Some(CodeActionKind::QUICKFIX),
+                    diagnostics: Some(vec![diag.clone()]),
+                    edit: Some(WorkspaceEdit {
+                        changes: Some(changes),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }));
+            }
+        }
+
+        if actions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(actions))
+        }
     }
 }
 
@@ -908,5 +1746,219 @@ mod tests {
         let mut files = Vec::new();
         collect_ww_files(&dir.path().to_path_buf(), &mut files);
         assert_eq!(files.len(), 2);
+    }
+
+    // -- find_all_entity_references --
+
+    fn parse_source(source: &str) -> SourceFile {
+        let (tokens, lex_errors) = lexer::lex(source);
+        assert!(lex_errors.is_empty(), "lex errors: {lex_errors:?}");
+        parser::parse(&tokens).expect("parse error")
+    }
+
+    #[test]
+    fn find_refs_definition_and_target() {
+        let source = "Kael is a character {\n    allied with Elara\n}\nElara is a character {\n    rival of Kael\n}";
+        let ast = parse_source(source);
+        let refs = find_all_entity_references(&ast, "Kael");
+
+        assert_eq!(refs.len(), 2);
+        assert!(refs[0].1, "first should be definition");
+        assert!(!refs[1].1, "second should be reference");
+        assert_eq!(&source[refs[0].0.clone()], "Kael");
+        assert_eq!(&source[refs[1].0.clone()], "Kael");
+    }
+
+    #[test]
+    fn find_refs_case_insensitive() {
+        let source = "KAEL is a character {}\nElara is a character {\n    rival of kael\n}";
+        let ast = parse_source(source);
+        let refs = find_all_entity_references(&ast, "Kael");
+
+        assert_eq!(refs.len(), 2);
+    }
+
+    #[test]
+    fn find_refs_involving_list() {
+        let source = "Kael is a character {}\nElara is a character {}\nthe Battle is an event {\n    involving [Kael, Elara]\n}";
+        let ast = parse_source(source);
+        let refs = find_all_entity_references(&ast, "Kael");
+
+        assert_eq!(refs.len(), 2);
+        assert!(refs[0].1, "first should be definition");
+        assert!(!refs[1].1, "second should be involving reference");
+    }
+
+    // -- global_span_to_location --
+
+    fn test_slices_with_text() -> Vec<FileSlice> {
+        vec![
+            FileSlice {
+                uri: Url::parse("file:///a.ww").unwrap(),
+                offset: 0,
+                len: 10,
+                text: "0123456789".to_string(),
+            },
+            FileSlice {
+                uri: Url::parse("file:///b.ww").unwrap(),
+                offset: 11,
+                len: 10,
+                text: "abcdefghij".to_string(),
+            },
+        ]
+    }
+
+    #[test]
+    fn global_span_to_location_first_file() {
+        let slices = test_slices_with_text();
+        let loc = global_span_to_location(&slices, &(2..5)).unwrap();
+        assert_eq!(loc.uri.path(), "/a.ww");
+        assert_eq!(loc.range.start, Position::new(0, 2));
+        assert_eq!(loc.range.end, Position::new(0, 5));
+    }
+
+    #[test]
+    fn global_span_to_location_second_file() {
+        let slices = test_slices_with_text();
+        let loc = global_span_to_location(&slices, &(13..16)).unwrap();
+        assert_eq!(loc.uri.path(), "/b.ww");
+        // Offset 13 global = 13-11 = 2 local
+        assert_eq!(loc.range.start, Position::new(0, 2));
+        assert_eq!(loc.range.end, Position::new(0, 5));
+    }
+
+    // -- entity_kind_to_symbol_kind --
+
+    #[test]
+    fn entity_kind_symbol_mapping() {
+        assert_eq!(entity_kind_to_symbol_kind("character"), SymbolKind::CLASS);
+        assert_eq!(
+            entity_kind_to_symbol_kind("location"),
+            SymbolKind::NAMESPACE
+        );
+        assert_eq!(
+            entity_kind_to_symbol_kind("fortress"),
+            SymbolKind::NAMESPACE
+        );
+        assert_eq!(entity_kind_to_symbol_kind("faction"), SymbolKind::STRUCT);
+        assert_eq!(entity_kind_to_symbol_kind("event"), SymbolKind::EVENT);
+        assert_eq!(entity_kind_to_symbol_kind("item"), SymbolKind::OBJECT);
+        assert_eq!(entity_kind_to_symbol_kind("lore"), SymbolKind::FILE);
+        assert_eq!(entity_kind_to_symbol_kind("starship"), SymbolKind::VARIABLE);
+    }
+
+    // -- classify_token --
+
+    #[test]
+    fn classify_string_token() {
+        assert_eq!(classify_token(&Token::Str("hello".into()), None), Some(3));
+    }
+
+    #[test]
+    fn classify_number_token() {
+        assert_eq!(classify_token(&Token::Integer(42), None), Some(4));
+    }
+
+    #[test]
+    fn classify_brace_token() {
+        assert_eq!(classify_token(&Token::LBrace, None), Some(6));
+    }
+
+    #[test]
+    fn classify_keyword_token() {
+        assert_eq!(classify_token(&Token::Word("world".into()), None), Some(0));
+    }
+
+    #[test]
+    fn classify_property_key_token() {
+        let next = Token::Word("human".into());
+        assert_eq!(
+            classify_token(&Token::Word("species".into()), Some(&next)),
+            Some(2)
+        );
+    }
+
+    // -- detect_completion_context --
+
+    #[test]
+    fn detect_context_entity_kind() {
+        assert!(matches!(
+            detect_completion_context("Kael is a "),
+            WwCompletionCtx::EntityKind
+        ));
+    }
+
+    #[test]
+    fn detect_context_relationship_target() {
+        assert!(matches!(
+            detect_completion_context("    member of "),
+            WwCompletionCtx::RelationshipTarget
+        ));
+    }
+
+    #[test]
+    fn detect_context_entity_body() {
+        assert!(matches!(
+            detect_completion_context("    "),
+            WwCompletionCtx::EntityBody
+        ));
+    }
+
+    #[test]
+    fn detect_context_default() {
+        assert!(matches!(
+            detect_completion_context("Kael"),
+            WwCompletionCtx::Default
+        ));
+    }
+
+    // -- extract_entity_name_from_diagnostic --
+
+    #[test]
+    fn extract_entity_name_match() {
+        assert_eq!(
+            extract_entity_name_from_diagnostic("undefined entity: \"Kael Stormborn\""),
+            Some("Kael Stormborn")
+        );
+    }
+
+    #[test]
+    fn extract_entity_name_no_match() {
+        assert_eq!(
+            extract_entity_name_from_diagnostic("some other error message"),
+            None
+        );
+    }
+
+    // -- source hash (incremental compilation) --
+
+    #[test]
+    fn source_hash_different() {
+        let hash1 = {
+            let mut h = DefaultHasher::new();
+            "hello".hash(&mut h);
+            h.finish()
+        };
+        let hash2 = {
+            let mut h = DefaultHasher::new();
+            "world".hash(&mut h);
+            h.finish()
+        };
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn source_hash_same() {
+        let hash1 = {
+            let mut h = DefaultHasher::new();
+            "hello world".hash(&mut h);
+            h.finish()
+        };
+        let hash2 = {
+            let mut h = DefaultHasher::new();
+            "hello world".hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(hash1, hash2);
     }
 }

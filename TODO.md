@@ -36,14 +36,14 @@
 ### ww-lsp
 
 - [x] Diagnostics, go-to-definition, completion, hover
-- [x] LSP server tests
-- [ ] Rename support
-- [ ] Find References
-- [ ] Document Symbols / Outline
-- [ ] Semantic Tokens (syntax highlighting from server)
-- [ ] Code Actions (quick fixes for diagnostics)
-- [ ] Context-aware completion (currently hardcoded keyword list)
-- [ ] Incremental compilation (currently recompiles full workspace on every change)
+- [x] LSP server tests (53 tests)
+- [x] Rename support (prepare + rename via AST reference search)
+- [x] Find References (AST-based: definitions, relationships, exits)
+- [x] Document Symbols / Outline (entity + world declarations)
+- [x] Semantic Tokens (keyword, type, property, string, number, comment, operator)
+- [x] Code Actions (quick fix: create stub entity from "undefined entity" diagnostic)
+- [x] Context-aware completion (entity kind, relationship target, property value, body)
+- [x] Incremental compilation (source hash skip when unchanged)
 - [x] Audit `.unwrap()` in server.rs:81 (can panic on malformed URL)
 - [x] Replace `unwrap_or("???")` patterns with proper error propagation
 
