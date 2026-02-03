@@ -36,7 +36,7 @@
 ### ww-lsp
 
 - [x] Diagnostics, go-to-definition, completion, hover
-- [ ] LSP server tests
+- [x] LSP server tests
 - [ ] Rename support
 - [ ] Find References
 - [ ] Document Symbols / Outline

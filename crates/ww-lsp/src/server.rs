@@ -590,3 +590,323 @@ fn find_word_at_offset(text: &str, offset: usize) -> &str {
 fn is_word_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- byte_offset_to_position --
+
+    #[test]
+    fn offset_to_position_start() {
+        let pos = byte_offset_to_position("hello\nworld\nfoo", 0);
+        assert_eq!(pos, Position::new(0, 0));
+    }
+
+    #[test]
+    fn offset_to_position_first_line() {
+        let pos = byte_offset_to_position("hello\nworld\nfoo", 3);
+        assert_eq!(pos, Position::new(0, 3));
+    }
+
+    #[test]
+    fn offset_to_position_second_line() {
+        // "hello\n" = 6 bytes, so offset 8 is line 1, char 2
+        let pos = byte_offset_to_position("hello\nworld\nfoo", 8);
+        assert_eq!(pos, Position::new(1, 2));
+    }
+
+    #[test]
+    fn offset_to_position_end_of_text() {
+        // offset == text.len() should clamp to last position
+        let text = "hello\nworld\nfoo";
+        let pos = byte_offset_to_position(text, text.len());
+        assert_eq!(pos, Position::new(2, 3));
+    }
+
+    #[test]
+    fn offset_to_position_beyond_eof() {
+        let text = "hello\nworld\nfoo";
+        let pos = byte_offset_to_position(text, 1000);
+        // Clamped to text.len(), same as end_of_text
+        assert_eq!(pos, Position::new(2, 3));
+    }
+
+    // -- position_to_byte_offset --
+
+    #[test]
+    fn position_to_offset_start() {
+        let offset = position_to_byte_offset("hello\nworld\nfoo", Position::new(0, 0));
+        assert_eq!(offset, 0);
+    }
+
+    #[test]
+    fn position_to_offset_within_line() {
+        let offset = position_to_byte_offset("hello\nworld\nfoo", Position::new(0, 3));
+        assert_eq!(offset, 3);
+    }
+
+    #[test]
+    fn position_to_offset_second_line() {
+        // line 1, char 2 → "hello\n" (6) + 2 = 8
+        let offset = position_to_byte_offset("hello\nworld\nfoo", Position::new(1, 2));
+        assert_eq!(offset, 8);
+    }
+
+    #[test]
+    fn position_to_offset_beyond_eof() {
+        let text = "hello\nworld\nfoo";
+        let offset = position_to_byte_offset(text, Position::new(99, 0));
+        assert_eq!(offset, text.len());
+    }
+
+    // -- Round-trip --
+
+    #[test]
+    fn offset_position_round_trip() {
+        let text = "hello\nworld\nfoo bar";
+        for offset in [0, 3, 5, 6, 8, 12, 15, text.len()] {
+            let pos = byte_offset_to_position(text, offset);
+            let back = position_to_byte_offset(text, pos);
+            assert_eq!(
+                back,
+                offset.min(text.len()),
+                "round-trip failed for offset {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn position_offset_round_trip() {
+        let text = "hello\nworld\nfoo";
+        let positions = [
+            Position::new(0, 0),
+            Position::new(0, 3),
+            Position::new(1, 0),
+            Position::new(1, 4),
+            Position::new(2, 2),
+        ];
+        for pos in positions {
+            let offset = position_to_byte_offset(text, pos);
+            let back = byte_offset_to_position(text, offset);
+            assert_eq!(
+                back, pos,
+                "round-trip failed for position ({}, {})",
+                pos.line, pos.character
+            );
+        }
+    }
+
+    // -- byte_span_to_range --
+
+    #[test]
+    fn span_to_range_single_line() {
+        let range = byte_span_to_range("hello world", &(0..5));
+        assert_eq!(range.start, Position::new(0, 0));
+        assert_eq!(range.end, Position::new(0, 5));
+    }
+
+    #[test]
+    fn span_to_range_multiline() {
+        // Span from "hel" on line 0 to "wo" on line 1
+        let range = byte_span_to_range("hello\nworld", &(3..8));
+        assert_eq!(range.start, Position::new(0, 3));
+        assert_eq!(range.end, Position::new(1, 2));
+    }
+
+    #[test]
+    fn span_to_range_zero_width() {
+        let range = byte_span_to_range("hello", &(3..3));
+        assert_eq!(range.start, Position::new(0, 3));
+        assert_eq!(range.end, Position::new(0, 3));
+    }
+
+    // -- find_word_at_offset --
+
+    #[test]
+    fn word_at_middle() {
+        assert_eq!(find_word_at_offset("hello world", 2), "hello");
+    }
+
+    #[test]
+    fn word_at_start_of_word() {
+        // Offset 6 is 'w' in "world"
+        assert_eq!(find_word_at_offset("hello world", 6), "world");
+    }
+
+    #[test]
+    fn word_at_end_of_word() {
+        // Offset 10 is 'd' in "world"
+        assert_eq!(find_word_at_offset("hello world", 10), "world");
+    }
+
+    #[test]
+    fn word_at_punctuation() {
+        // Offset on '{' with no preceding word char
+        assert_eq!(find_word_at_offset("{ hello }", 0), "");
+    }
+
+    #[test]
+    fn word_at_out_of_bounds() {
+        assert_eq!(find_word_at_offset("hello", 100), "");
+        assert_eq!(find_word_at_offset("", 0), "");
+    }
+
+    #[test]
+    fn word_includes_underscores_and_digits() {
+        assert_eq!(find_word_at_offset("foo_bar2 baz", 3), "foo_bar2");
+    }
+
+    // -- is_word_char --
+
+    #[test]
+    fn word_char_classification() {
+        assert!(is_word_char(b'a'));
+        assert!(is_word_char(b'Z'));
+        assert!(is_word_char(b'0'));
+        assert!(is_word_char(b'_'));
+        assert!(!is_word_char(b' '));
+        assert!(!is_word_char(b'{'));
+        assert!(!is_word_char(b'\n'));
+        assert!(!is_word_char(b'-'));
+    }
+
+    // -- find_definition_offset --
+
+    #[test]
+    fn find_def_is_a() {
+        let text = "Kael is a character { species human }";
+        assert_eq!(find_definition_offset(text, "Kael"), Some(0));
+    }
+
+    #[test]
+    fn find_def_is_an() {
+        let text = "the Sundering is an event { type cataclysm }";
+        assert_eq!(find_definition_offset(text, "the Sundering"), Some(0));
+    }
+
+    #[test]
+    fn find_def_case_insensitive() {
+        let text = "KAEL is a character { species human }";
+        assert_eq!(find_definition_offset(text, "kael"), Some(0));
+    }
+
+    #[test]
+    fn find_def_reference_before_definition() {
+        // "Kael" appears as a reference first, then as a definition
+        let text = "member of Kael\nKael is a character { species human }";
+        // Definition starts at offset 15 (after "member of Kael\n")
+        assert_eq!(find_definition_offset(text, "Kael"), Some(15));
+    }
+
+    #[test]
+    fn find_def_not_defined() {
+        let text = "just some random text without entities";
+        assert_eq!(find_definition_offset(text, "Kael"), None);
+    }
+
+    #[test]
+    fn find_def_fallback_to_first_occurrence() {
+        // Name appears but never as "Name is a/an ..." — falls back to first occurrence
+        let text = "allied with Kael\nlocated at Kael";
+        assert_eq!(find_definition_offset(text, "Kael"), Some(12));
+    }
+
+    // -- find_slice_for_offset / find_slice_for_span --
+
+    fn test_slices() -> Vec<FileSlice> {
+        vec![
+            FileSlice {
+                uri: Url::parse("file:///a.ww").unwrap(),
+                offset: 0,
+                len: 50,
+                text: String::new(),
+            },
+            FileSlice {
+                uri: Url::parse("file:///b.ww").unwrap(),
+                offset: 51, // 1-byte gap for newline
+                len: 30,
+                text: String::new(),
+            },
+        ]
+    }
+
+    #[test]
+    fn slice_for_offset_first_file() {
+        let slices = test_slices();
+        let s = find_slice_for_offset(&slices, 25).unwrap();
+        assert_eq!(s.uri.path(), "/a.ww");
+    }
+
+    #[test]
+    fn slice_for_offset_second_file() {
+        let slices = test_slices();
+        let s = find_slice_for_offset(&slices, 60).unwrap();
+        assert_eq!(s.uri.path(), "/b.ww");
+    }
+
+    #[test]
+    fn slice_for_offset_gap() {
+        let slices = test_slices();
+        // Offset 50 is in the newline gap between files
+        assert!(find_slice_for_offset(&slices, 50).is_none());
+    }
+
+    #[test]
+    fn slice_for_span_delegates() {
+        let slices = test_slices();
+        let s = find_slice_for_span(&slices, &(55..65)).unwrap();
+        assert_eq!(s.uri.path(), "/b.ww");
+    }
+
+    // -- collect_ww_files --
+
+    #[test]
+    fn collect_discovers_ww_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("world.ww"), "world \"Test\" {}").unwrap();
+        std::fs::write(dir.path().join("chars.ww"), "Kael is a character {}").unwrap();
+        std::fs::write(dir.path().join("readme.txt"), "not a ww file").unwrap();
+
+        let mut files = Vec::new();
+        collect_ww_files(&dir.path().to_path_buf(), &mut files);
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().all(|p| p.extension().unwrap() == "ww"));
+    }
+
+    #[test]
+    fn collect_skips_hidden_and_target() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("world.ww"), "").unwrap();
+
+        let hidden = dir.path().join(".hidden");
+        std::fs::create_dir(&hidden).unwrap();
+        std::fs::write(hidden.join("secret.ww"), "").unwrap();
+
+        let target = dir.path().join("target");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("build.ww"), "").unwrap();
+
+        let nm = dir.path().join("node_modules");
+        std::fs::create_dir(&nm).unwrap();
+        std::fs::write(nm.join("dep.ww"), "").unwrap();
+
+        let mut files = Vec::new();
+        collect_ww_files(&dir.path().to_path_buf(), &mut files);
+        assert_eq!(files.len(), 1, "should only find root world.ww");
+    }
+
+    #[test]
+    fn collect_recurses_subdirectories() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("root.ww"), "").unwrap();
+
+        let sub = dir.path().join("subdir");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("nested.ww"), "").unwrap();
+
+        let mut files = Vec::new();
+        collect_ww_files(&dir.path().to_path_buf(), &mut files);
+        assert_eq!(files.len(), 2);
+    }
+}
