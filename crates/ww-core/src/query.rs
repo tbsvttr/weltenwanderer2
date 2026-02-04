@@ -14,6 +14,7 @@ pub struct QueryBuilder<'w> {
 }
 
 impl<'w> QueryBuilder<'w> {
+    /// Create a new query builder targeting the given world.
     pub fn new(world: &'w World) -> Self {
         Self {
             world,

@@ -1,3 +1,5 @@
+//! CLI frontend for the Weltenwanderer world-building engine.
+
 mod commands;
 mod tui;
 
@@ -118,6 +120,29 @@ enum Commands {
         dir: PathBuf,
     },
 
+    /// Run a tick-based simulation of the world
+    Simulate {
+        /// Number of ticks to simulate (default: 24 = one day at 1 hour/tick)
+        #[arg(short, long, default_value = "24")]
+        ticks: u64,
+
+        /// RNG seed for deterministic simulation
+        #[arg(short, long, default_value = "42")]
+        seed: u64,
+
+        /// In-world hours per tick
+        #[arg(long, default_value = "1.0")]
+        speed: f64,
+
+        /// Show all events (not just summary)
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Directory containing .ww files
+        #[arg(short, long, default_value = ".")]
+        dir: PathBuf,
+    },
+
     /// Launch interactive TUI world explorer
     Tui {
         /// Directory containing .ww files
@@ -165,6 +190,13 @@ fn main() {
             output,
             dir,
         } => commands::export::run(&dir, &format, output.as_deref()),
+        Commands::Simulate {
+            ticks,
+            seed,
+            speed,
+            verbose,
+            dir,
+        } => commands::simulate::run(&dir, ticks, seed, speed, verbose),
         Commands::Tui { dir } => commands::compile_dir_for_tui(&dir).and_then(tui::run),
         Commands::Lsp => {
             // Exec the separate ww-lsp binary

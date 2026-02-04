@@ -108,17 +108,26 @@
 //! matter — entities can reference each other across files. See `iron-kingdoms/`
 //! for an example world split across multiple files.
 
+/// Abstract syntax tree types produced by the parser.
 pub mod ast;
+/// Compiler that transforms AST declarations into a `ww_core::World`.
 pub mod compiler;
+/// Diagnostic types and pretty-printing for errors and warnings.
 pub mod diagnostics;
+/// Tokenizer (lexer) for `.ww` source files.
 pub mod lexer;
+/// Chumsky-based parser that turns token streams into an AST.
 pub mod parser;
+/// Cross-file name resolver and source-map utilities.
 pub mod resolver;
 
 use std::path::Path;
 
+/// Re-export of [`compiler::CompileResult`] for convenience.
 pub use compiler::CompileResult;
+/// Re-export of [`diagnostics::Diagnostic`] for convenience.
 pub use diagnostics::Diagnostic;
+/// Re-export of [`resolver::SourceMap`] for convenience.
 pub use resolver::SourceMap;
 
 /// An input file for multi-file compilation.

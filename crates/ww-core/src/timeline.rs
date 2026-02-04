@@ -5,7 +5,9 @@ use crate::world::World;
 /// A timeline entry: an event entity with its resolved date.
 #[derive(Debug)]
 pub struct TimelineEntry<'w> {
+    /// The event entity this entry represents.
     pub entity: &'w Entity,
+    /// The resolved in-world date of the event.
     pub date: &'w WorldDate,
 }
 

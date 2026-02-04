@@ -11,10 +11,15 @@ use crate::system::System;
 /// Built-in need categories.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NeedKind {
+    /// The need for food.
     Hunger,
+    /// The need for sleep and rest.
     Rest,
+    /// The need for social interaction.
     Social,
+    /// The need for physical safety.
     Safety,
+    /// A user-defined need category.
     Custom(String),
 }
 
@@ -33,6 +38,7 @@ impl std::fmt::Display for NeedKind {
 /// Current need levels for a single entity. Each value is 0.0..=1.0.
 #[derive(Debug, Clone)]
 pub struct NeedState {
+    /// Current level for each tracked need (0.0 = depleted, 1.0 = fully satisfied).
     pub levels: HashMap<NeedKind, f64>,
 }
 
@@ -43,6 +49,7 @@ impl NeedState {
         Self { levels }
     }
 
+    /// Return the current level (0.0..=1.0) of the given need, if tracked.
     pub fn get(&self, need: &NeedKind) -> Option<f64> {
         self.levels.get(need).copied()
     }
@@ -116,6 +123,7 @@ pub struct NeedsSystem {
 }
 
 impl NeedsSystem {
+    /// Create a new needs system with the given configuration.
     pub fn new(config: NeedsConfig) -> Self {
         Self {
             config,
@@ -123,18 +131,22 @@ impl NeedsSystem {
         }
     }
 
+    /// Create a new needs system using the default configuration.
     pub fn with_default_config() -> Self {
         Self::new(NeedsConfig::default())
     }
 
+    /// Return the need state for the given entity, if tracked.
     pub fn get_state(&self, id: EntityId) -> Option<&NeedState> {
         self.states.get(&id)
     }
 
+    /// Return a mutable reference to the need state for the given entity.
     pub fn get_state_mut(&mut self, id: EntityId) -> Option<&mut NeedState> {
         self.states.get_mut(&id)
     }
 
+    /// Return all tracked need states keyed by entity ID.
     pub fn all_states(&self) -> &HashMap<EntityId, NeedState> {
         &self.states
     }
@@ -270,5 +282,55 @@ mod tests {
         let critical = state.critical_needs(0.15);
         assert_eq!(critical.len(), 1);
         assert_eq!(critical[0], &NeedKind::Hunger);
+    }
+
+    #[test]
+    fn untracked_need_returns_none() {
+        let state = NeedState::full(&[NeedKind::Hunger]);
+        assert!(state.get(&NeedKind::Rest).is_none());
+    }
+
+    #[test]
+    fn custom_need_kind() {
+        let custom = NeedKind::Custom("faith".into());
+        let state = NeedState::full(std::slice::from_ref(&custom));
+        assert!((state.get(&custom).unwrap() - 1.0).abs() < f64::EPSILON);
+        assert_eq!(format!("{custom}"), "faith");
+    }
+
+    #[test]
+    fn multiple_critical_needs() {
+        let mut state = NeedState::full(&[
+            NeedKind::Hunger,
+            NeedKind::Rest,
+            NeedKind::Social,
+            NeedKind::Safety,
+        ]);
+        state.decay(&NeedKind::Hunger, 0.9); // 0.1
+        state.decay(&NeedKind::Rest, 0.95); // 0.05
+        state.decay(&NeedKind::Social, 0.5); // 0.5 — not critical
+        let critical = state.critical_needs(0.15);
+        assert_eq!(critical.len(), 2);
+    }
+
+    #[test]
+    fn decay_and_satisfy_untracked_need_is_noop() {
+        let mut state = NeedState::full(&[NeedKind::Hunger]);
+        // Decaying/satisfying an untracked need should not panic
+        state.decay(&NeedKind::Rest, 0.5);
+        state.satisfy(&NeedKind::Rest, 0.5);
+        assert!(state.get(&NeedKind::Rest).is_none());
+    }
+
+    #[test]
+    fn needs_config_default_has_four_needs() {
+        let config = NeedsConfig::default();
+        assert_eq!(config.needs.len(), 4);
+        assert_eq!(config.lethal_needs, vec![NeedKind::Hunger]);
+        assert!((config.critical_threshold - 0.15).abs() < f64::EPSILON);
+        assert!((config.death_threshold - 0.0).abs() < f64::EPSILON);
+        for need in &config.needs {
+            assert!((config.decay_rates.get(need).copied().unwrap() - 0.01).abs() < f64::EPSILON);
+        }
     }
 }

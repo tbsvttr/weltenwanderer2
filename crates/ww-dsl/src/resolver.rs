@@ -23,6 +23,7 @@ pub struct SourceMap {
 }
 
 impl SourceMap {
+    /// Create an empty source map with no file entries.
     pub fn new() -> Self {
         Self { files: Vec::new() }
     }

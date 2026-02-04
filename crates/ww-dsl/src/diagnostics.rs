@@ -4,20 +4,27 @@ use std::fmt;
 /// Severity level for diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
+    /// A fatal error that prevents successful compilation.
     Error,
+    /// A non-fatal warning that does not block compilation.
     Warning,
 }
 
 /// A diagnostic message with source location.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
+    /// Whether this diagnostic is an error or a warning.
     pub severity: Severity,
+    /// Byte range in the source that this diagnostic refers to.
     pub span: std::ops::Range<usize>,
+    /// Human-readable diagnostic message.
     pub message: String,
+    /// Optional label displayed inline at the span location.
     pub label: Option<String>,
 }
 
 impl Diagnostic {
+    /// Create an error-level diagnostic at the given span.
     pub fn error(span: std::ops::Range<usize>, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Error,
@@ -27,6 +34,7 @@ impl Diagnostic {
         }
     }
 
+    /// Create a warning-level diagnostic at the given span.
     pub fn warning(span: std::ops::Range<usize>, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Warning,
@@ -36,6 +44,7 @@ impl Diagnostic {
         }
     }
 
+    /// Attach an inline label to this diagnostic for display at the span.
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self

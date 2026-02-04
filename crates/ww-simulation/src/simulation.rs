@@ -133,18 +133,22 @@ impl Simulation {
         }
     }
 
+    /// Return a reference to the simulation world.
     pub fn world(&self) -> &World {
         &self.world
     }
 
+    /// Return a mutable reference to the simulation world.
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 
+    /// Return a reference to the simulation clock.
     pub fn clock(&self) -> &SimClock {
         &self.clock
     }
 
+    /// Return a reference to the simulation event log.
     pub fn events(&self) -> &EventLog {
         &self.events
     }
@@ -168,6 +172,7 @@ impl Simulation {
         self.world
     }
 
+    /// Return the current simulation tick number.
     pub fn current_tick(&self) -> u64 {
         self.clock.tick()
     }
@@ -397,5 +402,170 @@ mod tests {
         let state = spatial.get_state(kael_id).unwrap();
         assert_eq!(state.current_location, loc_b);
         assert!(!state.is_traveling());
+    }
+
+    #[test]
+    fn init_is_idempotent() {
+        let (world, _) = test_world_with_character();
+        let mut sim = Simulation::new(world, SimConfig::default());
+        sim.add_system(NeedsSystem::with_default_config());
+
+        sim.init().unwrap();
+        sim.init().unwrap(); // Should be a no-op
+        assert_eq!(sim.current_tick(), 0);
+    }
+
+    #[test]
+    fn multiple_characters_simulated() {
+        let mut world = World::new(WorldMeta::new("Test"));
+        for name in ["Alice", "Bob", "Carol"] {
+            let mut ch = Entity::new(EntityKind::Character, name);
+            ch.components.character = Some(CharacterComponent {
+                status: CharacterStatus::Alive,
+                ..Default::default()
+            });
+            world.add_entity(ch).unwrap();
+        }
+
+        let mut sim = Simulation::new(world, SimConfig::default());
+        sim.add_system(NeedsSystem::with_default_config());
+        sim.add_system(ScheduleSystem::new());
+        sim.run(24).unwrap();
+
+        // All 3 characters should have need states
+        let needs = sim.get_system::<NeedsSystem>().unwrap();
+        assert_eq!(needs.all_states().len(), 3);
+
+        // All 3 should have schedules
+        let sched = sim.get_system::<ScheduleSystem>().unwrap();
+        for id in needs.all_states().keys() {
+            assert!(sched.get_schedule(*id).is_some());
+        }
+    }
+
+    #[test]
+    fn death_emits_entity_died_event() {
+        let (world, id) = test_world_with_character();
+        let config = NeedsConfig {
+            death_threshold: 0.0,
+            decay_rates: {
+                let mut rates = std::collections::HashMap::new();
+                // Hunger decays very fast, others normal
+                rates.insert(crate::needs::NeedKind::Hunger, 0.5);
+                rates.insert(crate::needs::NeedKind::Rest, 0.01);
+                rates.insert(crate::needs::NeedKind::Social, 0.01);
+                rates.insert(crate::needs::NeedKind::Safety, 0.01);
+                rates
+            },
+            ..NeedsConfig::default()
+        };
+
+        let mut sim = Simulation::new(world, SimConfig::default());
+        sim.add_system(NeedsSystem::new(config));
+        sim.run(5).unwrap();
+
+        // Should have a death event
+        let death_events: Vec<_> = sim
+            .events()
+            .events()
+            .iter()
+            .filter(|e| matches!(&e.kind, crate::event::SimEventKind::EntityDied { entity, .. } if *entity == id))
+            .collect();
+        assert!(
+            !death_events.is_empty(),
+            "expected at least one EntityDied event"
+        );
+    }
+
+    #[test]
+    fn event_log_tracks_all_system_types() {
+        let (world, _id) = test_world_with_character();
+        let mut sim = Simulation::new(world, SimConfig::default());
+        sim.add_system(NeedsSystem::with_default_config());
+        sim.add_system(ScheduleSystem::new());
+        sim.run(100).unwrap();
+
+        let events = sim.events().events();
+        // Should have ActivityChanged events from schedule system
+        let has_activity = events
+            .iter()
+            .any(|e| matches!(&e.kind, crate::event::SimEventKind::ActivityChanged { .. }));
+        assert!(has_activity, "expected ActivityChanged events");
+
+        // Should have NeedCritical events from needs system (after 100 ticks some needs decay)
+        let has_critical = events
+            .iter()
+            .any(|e| matches!(&e.kind, crate::event::SimEventKind::NeedCritical { .. }));
+        assert!(has_critical, "expected NeedCritical events");
+    }
+
+    #[test]
+    fn config_max_events_limits_log_in_simulation() {
+        let (world, _) = test_world_with_character();
+        let config = SimConfig::default().with_max_events(5);
+        let mut sim = Simulation::new(world, config);
+        sim.add_system(NeedsSystem::with_default_config());
+        sim.add_system(ScheduleSystem::new());
+        sim.run(100).unwrap();
+
+        // Event log should be capped at 5
+        assert!(
+            sim.events().len() <= 5,
+            "event log should be limited to 5 events, got {}",
+            sim.events().len()
+        );
+    }
+
+    #[test]
+    fn dead_characters_stop_decaying() {
+        let (world, id) = test_world_with_character();
+        let config = NeedsConfig {
+            death_threshold: 0.0,
+            decay_rates: {
+                let mut rates = std::collections::HashMap::new();
+                rates.insert(crate::needs::NeedKind::Hunger, 1.0); // Dies on tick 1
+                rates.insert(crate::needs::NeedKind::Rest, 0.01);
+                rates.insert(crate::needs::NeedKind::Social, 0.01);
+                rates.insert(crate::needs::NeedKind::Safety, 0.01);
+                rates
+            },
+            ..NeedsConfig::default()
+        };
+
+        let mut sim = Simulation::new(world, SimConfig::default());
+        sim.add_system(NeedsSystem::new(config));
+        sim.run(10).unwrap();
+
+        // Character should be dead
+        let entity = sim.world().get_entity(id).unwrap();
+        assert_eq!(
+            entity.components.character.as_ref().unwrap().status,
+            CharacterStatus::Dead
+        );
+
+        // Rest should not have decayed much past the death tick (only tick 1 alive)
+        let needs = sim.get_system::<NeedsSystem>().unwrap();
+        let state = needs.get_state(id).unwrap();
+        let rest = state.get(&crate::needs::NeedKind::Rest).unwrap();
+        // Only 1 tick of decay at 0.01 = 0.99
+        assert!(rest > 0.95, "rest should barely have decayed: {rest}");
+    }
+
+    #[test]
+    fn get_system_returns_none_for_unregistered() {
+        let world = World::new(WorldMeta::new("Test"));
+        let sim = Simulation::new(world, SimConfig::default());
+        assert!(sim.get_system::<NeedsSystem>().is_none());
+        assert!(sim.get_system::<ScheduleSystem>().is_none());
+        assert!(sim.get_system::<SpatialSystem>().is_none());
+    }
+
+    #[test]
+    fn simulation_debug_format() {
+        let world = World::new(WorldMeta::new("Test"));
+        let sim = Simulation::new(world, SimConfig::default());
+        let debug = format!("{sim:?}");
+        assert!(debug.contains("Simulation"));
+        assert!(debug.contains("tick"));
     }
 }

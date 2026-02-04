@@ -8,18 +8,31 @@ use std::fmt;
 /// combines them into multi-word keywords based on grammatical context.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    /// Left brace `{`.
     LBrace,
+    /// Right brace `}`.
     RBrace,
+    /// Left bracket `[`.
     LBracket,
+    /// Right bracket `]`.
     RBracket,
+    /// Left parenthesis `(`.
     LParen,
+    /// Right parenthesis `)`.
     RParen,
+    /// Comma separator `,`.
     Comma,
+    /// Newline character (statement separator).
     Newline,
+    /// Triple-quoted doc string (`"""..."""`).
     DocString(String),
+    /// Double-quoted string literal.
     Str(String),
+    /// Integer literal (supports Rust-style underscores and negatives).
     Integer(i64),
+    /// Floating-point literal.
     Float(f64),
+    /// Bare word (identifier or keyword, disambiguated by the parser).
     Word(String),
 }
 
@@ -92,7 +105,9 @@ enum RawToken {
 /// A lexer error with source location.
 #[derive(Debug, Clone)]
 pub struct LexError {
+    /// Byte range of the erroneous input in the source.
     pub span: std::ops::Range<usize>,
+    /// Human-readable description of the lexer error.
     pub message: String,
 }
 

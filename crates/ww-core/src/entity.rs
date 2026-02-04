@@ -12,6 +12,7 @@ use crate::component::ComponentSet;
 pub struct EntityId(pub Uuid);
 
 impl EntityId {
+    /// Generate a new random entity ID.
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -33,12 +34,19 @@ impl fmt::Display for EntityId {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityKind {
+    /// A geographical place or area in the world.
     Location,
+    /// A person or creature in the world.
     Character,
+    /// An organization, group, or political body.
     Faction,
+    /// A historical or scheduled occurrence.
     Event,
+    /// A physical object, artifact, or possession.
     Item,
+    /// Background knowledge, myths, or world history.
     Lore,
+    /// A user-defined entity type not covered by built-in kinds.
     Custom(String),
 }
 
@@ -97,11 +105,17 @@ impl fmt::Display for EntityKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MetadataValue {
+    /// A text value.
     String(String),
+    /// A 64-bit signed integer value.
     Integer(i64),
+    /// A 64-bit floating-point value.
     Float(f64),
+    /// A boolean value.
     Boolean(bool),
+    /// An ordered list of metadata values.
     List(Vec<MetadataValue>),
+    /// A string-keyed map of metadata values.
     Map(HashMap<String, MetadataValue>),
 }
 
@@ -124,18 +138,28 @@ impl fmt::Display for MetadataValue {
 /// Core entity struct. Every world object is an Entity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entity {
+    /// Unique identifier for this entity.
     pub id: EntityId,
+    /// The kind (type) of this entity.
     pub kind: EntityKind,
+    /// Display name of the entity.
     pub name: String,
+    /// Free-text description of the entity.
     pub description: String,
+    /// User-defined tags for categorization and filtering.
     pub tags: Vec<String>,
+    /// Arbitrary key-value metadata properties.
     pub properties: HashMap<String, MetadataValue>,
+    /// Typed component data attached to this entity.
     pub components: ComponentSet,
+    /// Timestamp when the entity was created.
     pub created_at: DateTime<Utc>,
+    /// Timestamp when the entity was last modified.
     pub updated_at: DateTime<Utc>,
 }
 
 impl Entity {
+    /// Create a new entity with a random ID.
     pub fn new(kind: EntityKind, name: impl Into<String>) -> Self {
         Self::with_id(EntityId::new(), kind, name)
     }

@@ -7,6 +7,7 @@ pub mod list;
 pub mod new;
 pub mod search;
 pub mod show;
+pub mod simulate;
 pub mod timeline;
 
 use std::path::Path;

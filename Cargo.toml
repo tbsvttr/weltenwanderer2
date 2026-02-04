@@ -66,3 +66,4 @@ all = { level = "deny" }
 
 [workspace.lints.rust]
 unsafe_code = { level = "forbid" }
+missing_docs = { level = "deny" }

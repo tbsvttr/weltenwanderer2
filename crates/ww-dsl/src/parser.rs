@@ -9,7 +9,9 @@ type Span = SimpleSpan;
 /// Parse error with source span.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// Byte range in the source where the parse error occurred.
     pub span: std::ops::Range<usize>,
+    /// Human-readable description of the parse error.
     pub message: String,
 }
 

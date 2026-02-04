@@ -11,18 +11,28 @@ use crate::relationship::{Relationship, RelationshipId};
 /// Metadata about the world itself.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldMeta {
+    /// Name of the world.
     pub name: String,
+    /// Free-text description of the world.
     pub description: String,
+    /// Optional genre classification (e.g. "fantasy", "sci-fi").
     pub genre: Option<String>,
+    /// Optional setting description (e.g. "medieval", "post-apocalyptic").
     pub setting: Option<String>,
+    /// List of world authors or contributors.
     pub authors: Vec<String>,
+    /// Schema version for forward compatibility.
     pub schema_version: u32,
+    /// Arbitrary key-value metadata properties.
     pub properties: HashMap<String, MetadataValue>,
+    /// Timestamp when the world was created.
     pub created_at: DateTime<Utc>,
+    /// Timestamp when the world metadata was last modified.
     pub updated_at: DateTime<Utc>,
 }
 
 impl WorldMeta {
+    /// Create new world metadata with the given name and default values.
     pub fn new(name: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
@@ -42,6 +52,7 @@ impl WorldMeta {
 /// The central world model. Owns all entities and relationships.
 #[derive(Debug, Clone)]
 pub struct World {
+    /// Metadata about this world (name, genre, authors, etc.).
     pub meta: WorldMeta,
     entities: HashMap<EntityId, Entity>,
     relationships: HashMap<RelationshipId, Relationship>,
@@ -54,6 +65,7 @@ pub struct World {
 }
 
 impl World {
+    /// Create an empty world with the given metadata.
     pub fn new(meta: WorldMeta) -> Self {
         Self {
             meta,
@@ -309,10 +321,12 @@ impl World {
     // Statistics
     // -----------------------------------------------------------------------
 
+    /// Return the total number of entities in the world.
     pub fn entity_count(&self) -> usize {
         self.entities.len()
     }
 
+    /// Return the total number of relationships in the world.
     pub fn relationship_count(&self) -> usize {
         self.relationships.len()
     }

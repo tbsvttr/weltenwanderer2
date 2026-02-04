@@ -11,6 +11,7 @@ use crate::entity::{EntityId, MetadataValue};
 pub struct RelationshipId(pub Uuid);
 
 impl RelationshipId {
+    /// Generates a new random relationship identifier.
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -31,16 +32,24 @@ impl fmt::Display for RelationshipId {
 /// A directed edge between two entities.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relationship {
+    /// Unique identifier for this relationship edge.
     pub id: RelationshipId,
+    /// The entity where this relationship originates.
     pub source: EntityId,
+    /// The entity this relationship points to.
     pub target: EntityId,
+    /// The semantic kind of this relationship.
     pub kind: RelationshipKind,
+    /// Optional human-readable label describing the relationship.
     pub label: Option<String>,
+    /// Arbitrary key-value metadata attached to this relationship.
     pub metadata: HashMap<String, MetadataValue>,
+    /// Whether the relationship applies in both directions.
     pub bidirectional: bool,
 }
 
 impl Relationship {
+    /// Creates a new relationship from `source` to `target` with the given kind.
     pub fn new(source: EntityId, kind: RelationshipKind, target: EntityId) -> Self {
         let bidirectional = kind.is_bidirectional();
         Self {
@@ -54,6 +63,7 @@ impl Relationship {
         }
     }
 
+    /// Attaches a human-readable label to this relationship.
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self
@@ -65,29 +75,43 @@ impl Relationship {
 #[serde(rename_all = "snake_case")]
 pub enum RelationshipKind {
     // Spatial
+    /// Entity is physically inside another entity.
     ContainedIn,
+    /// Entity has a path or passage to another entity.
     ConnectedTo,
+    /// Entity is situated at a location.
     LocatedAt,
+    /// Entity uses a location as its home base.
     BasedAt,
 
     // Social
+    /// Entity belongs to an organization or group.
     MemberOf,
+    /// Entity leads or commands another entity.
     LeaderOf,
+    /// Entities are allied or cooperating.
     AlliedWith,
+    /// Entities are rivals or adversaries.
     RivalOf,
+    /// Entities share a familial or generic association.
     RelatedTo,
 
     // Ownership
+    /// Entity is owned or possessed by another entity.
     OwnedBy,
 
     // Events
+    /// Entity took part in an event.
     ParticipatedIn,
+    /// Entity was caused or triggered by another entity.
     CausedBy,
 
     // Lore
+    /// Entity references or cites another entity.
     References,
 
     // Generic
+    /// A user-defined relationship kind.
     Custom(String),
 }
 

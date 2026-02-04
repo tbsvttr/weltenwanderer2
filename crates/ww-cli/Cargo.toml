@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 ww-core = { workspace = true }
 ww-dsl = { workspace = true }
+ww-simulation = { path = "../ww-simulation" }
 clap = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }

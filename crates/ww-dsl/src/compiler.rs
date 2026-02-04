@@ -9,12 +9,16 @@ use crate::resolver::{Resolver, SourceMap};
 
 /// Result of compiling DSL source into a World.
 pub struct CompileResult {
+    /// The compiled world (may be partial if errors occurred).
     pub world: World,
+    /// Errors and warnings produced during compilation.
     pub diagnostics: Vec<Diagnostic>,
+    /// Maps byte offsets back to individual source files.
     pub source_map: SourceMap,
 }
 
 impl CompileResult {
+    /// Returns `true` if any diagnostic has error severity.
     pub fn has_errors(&self) -> bool {
         self.diagnostics
             .iter()

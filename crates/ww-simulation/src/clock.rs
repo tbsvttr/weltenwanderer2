@@ -13,6 +13,7 @@ pub struct SimClock {
 }
 
 impl SimClock {
+    /// Create a new clock starting at tick 0 with the given start date and tick duration.
     pub fn new(start_date: WorldDate, hours_per_tick: f64) -> Self {
         Self {
             tick: 0,
@@ -29,6 +30,7 @@ impl SimClock {
         self.tick
     }
 
+    /// Return the current tick number.
     pub fn tick(&self) -> u64 {
         self.tick
     }
@@ -73,6 +75,7 @@ impl SimClock {
         self.accumulated_hours
     }
 
+    /// Return the configured number of in-world hours per tick.
     pub fn hours_per_tick(&self) -> f64 {
         self.hours_per_tick
     }

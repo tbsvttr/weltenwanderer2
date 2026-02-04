@@ -1,3 +1,5 @@
+//! Language Server Protocol (LSP) server for the Weltenwanderer DSL.
+
 mod server;
 
 use tower_lsp::{LspService, Server};

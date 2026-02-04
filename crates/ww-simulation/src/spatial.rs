@@ -12,15 +12,22 @@ use crate::system::System;
 /// Spatial simulation state for a single entity.
 #[derive(Debug, Clone)]
 pub struct SpatialState {
+    /// The entity's current location.
     pub current_location: EntityId,
+    /// The entity's travel destination, if any.
     pub destination: Option<EntityId>,
+    /// The sequence of locations to traverse to reach the destination.
     pub path: Vec<EntityId>,
+    /// The index of the next location in the path to visit.
     pub path_index: usize,
+    /// Movement speed in location-edges per tick.
     pub speed: f64,
+    /// Accumulated movement progress toward the next location.
     pub progress: f64,
 }
 
 impl SpatialState {
+    /// Create a stationary spatial state at the given location.
     pub fn at(location: EntityId) -> Self {
         Self {
             current_location: location,
@@ -32,6 +39,7 @@ impl SpatialState {
         }
     }
 
+    /// Return `true` if this entity is currently traveling along a path.
     pub fn is_traveling(&self) -> bool {
         self.destination.is_some() && self.path_index < self.path.len()
     }
@@ -51,6 +59,7 @@ impl Default for SpatialSystem {
 }
 
 impl SpatialSystem {
+    /// Create a new spatial system with default speed of 1.0.
     pub fn new() -> Self {
         Self {
             states: HashMap::new(),
@@ -58,19 +67,23 @@ impl SpatialSystem {
         }
     }
 
+    /// Set the default movement speed for newly tracked entities.
     pub fn with_default_speed(mut self, speed: f64) -> Self {
         self.default_speed = speed;
         self
     }
 
+    /// Return the spatial state for the given entity, if tracked.
     pub fn get_state(&self, id: EntityId) -> Option<&SpatialState> {
         self.states.get(&id)
     }
 
+    /// Return all tracked spatial states keyed by entity ID.
     pub fn all_states(&self) -> &HashMap<EntityId, SpatialState> {
         &self.states
     }
 
+    /// Set the movement speed for the given entity.
     pub fn set_speed(&mut self, entity: EntityId, speed: f64) {
         if let Some(state) = self.states.get_mut(&entity) {
             state.speed = speed;
@@ -386,5 +399,115 @@ mod tests {
         state.progress += 1.0;
         // After 1 unit of progress: move to B
         assert!(state.progress >= 1.0);
+    }
+
+    #[test]
+    fn bfs_with_cycle_in_graph() {
+        let mut world = World::new(WorldMeta::new("Test"));
+        let a = world
+            .add_entity(Entity::new(EntityKind::Location, "A"))
+            .unwrap();
+        let b = world
+            .add_entity(Entity::new(EntityKind::Location, "B"))
+            .unwrap();
+        let c = world
+            .add_entity(Entity::new(EntityKind::Location, "C"))
+            .unwrap();
+        // A -- B -- C -- A (cycle, bidirectional via neighbors)
+        world
+            .add_relationship(Relationship::new(a, RelationshipKind::ConnectedTo, b))
+            .unwrap();
+        world
+            .add_relationship(Relationship::new(b, RelationshipKind::ConnectedTo, c))
+            .unwrap();
+        world
+            .add_relationship(Relationship::new(c, RelationshipKind::ConnectedTo, a))
+            .unwrap();
+
+        // BFS terminates despite cycle; finds shortest path
+        // C->A relationship makes A a neighbor of C (bidirectional),
+        // so A can reach C in 1 hop
+        let path = SpatialSystem::find_path(&world, a, c).unwrap();
+        assert_eq!(path.len(), 1);
+        assert_eq!(path, vec![c]);
+    }
+
+    #[test]
+    fn send_to_same_location_returns_zero() {
+        let (world, a, _, _) = location_world();
+        let char_id = EntityId::new();
+
+        let mut sys = SpatialSystem::new();
+        sys.states.insert(char_id, SpatialState::at(a));
+        let hops = sys.send_to(char_id, a, &world).unwrap();
+        assert_eq!(hops, 0);
+        assert!(!sys.get_state(char_id).unwrap().is_traveling());
+    }
+
+    #[test]
+    fn send_to_untracked_entity_fails() {
+        let (world, _, b, _) = location_world();
+        let unknown = EntityId::new();
+
+        let mut sys = SpatialSystem::new();
+        let result = sys.send_to(unknown, b, &world);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn spatial_state_not_traveling_when_stationary() {
+        let id = EntityId::new();
+        let state = SpatialState::at(id);
+        assert!(!state.is_traveling());
+        assert!(state.destination.is_none());
+        assert!(state.path.is_empty());
+    }
+
+    #[test]
+    fn default_speed_applied() {
+        let sys = SpatialSystem::new().with_default_speed(2.5);
+        // The system starts with no states; default_speed is applied during init
+        assert!((sys.default_speed - 2.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn distance_returns_none_without_coordinates() {
+        let mut world = World::new(WorldMeta::new("Test"));
+        let a = world
+            .add_entity(Entity::new(EntityKind::Location, "NoCoords"))
+            .unwrap();
+        let b = world
+            .add_entity(Entity::new(EntityKind::Location, "AlsoNoCoords"))
+            .unwrap();
+        assert!(SpatialSystem::distance(&world, a, b).is_none());
+    }
+
+    #[test]
+    fn distance_with_z_coordinate() {
+        let mut world = World::new(WorldMeta::new("Test"));
+        let mut e1 = Entity::new(EntityKind::Location, "P1");
+        e1.components.location = Some(LocationComponent {
+            coordinates: Some(Coordinates {
+                x: 0.0,
+                y: 0.0,
+                z: Some(0.0),
+            }),
+            ..Default::default()
+        });
+        let mut e2 = Entity::new(EntityKind::Location, "P2");
+        e2.components.location = Some(LocationComponent {
+            coordinates: Some(Coordinates {
+                x: 1.0,
+                y: 2.0,
+                z: Some(2.0),
+            }),
+            ..Default::default()
+        });
+        let id1 = world.add_entity(e1).unwrap();
+        let id2 = world.add_entity(e2).unwrap();
+
+        let dist = SpatialSystem::distance(&world, id1, id2).unwrap();
+        // sqrt(1 + 4 + 4) = 3.0
+        assert!((dist - 3.0).abs() < f64::EPSILON);
     }
 }

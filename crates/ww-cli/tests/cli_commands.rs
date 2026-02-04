@@ -1,4 +1,5 @@
 #![allow(deprecated)] // Command::cargo_bin – macro replacement not yet stable
+#![allow(missing_docs)] // Integration tests don't need public docs
 
 use std::fs;
 
@@ -415,6 +416,40 @@ fn export_unsupported_format() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("unsupported format"));
+}
+
+// ---------------------------------------------------------------------------
+// simulate
+// ---------------------------------------------------------------------------
+
+#[test]
+fn simulate_runs_default() {
+    let dir = test_world();
+    ww().args(["simulate", "-d", dir.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Simulation")
+                .and(predicate::str::contains("Character Status")),
+        );
+}
+
+#[test]
+fn simulate_custom_ticks() {
+    let dir = test_world();
+    ww().args(["simulate", "-t", "48", "-d", dir.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("48 ticks"));
+}
+
+#[test]
+fn simulate_verbose() {
+    let dir = test_world();
+    ww().args(["simulate", "-v", "-d", dir.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Event Log"));
 }
 
 // ---------------------------------------------------------------------------
