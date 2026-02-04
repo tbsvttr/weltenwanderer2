@@ -5,6 +5,7 @@ members = [
     "crates/ww-dsl",
     "crates/ww-cli",
     "crates/ww-lsp",
+    "crates/ww-simulation",
 ]
 
 [workspace.package]
@@ -52,6 +53,9 @@ tempfile = "3"
 # LSP
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
+
+# Simulation
+rand = { version = "0.9", features = ["std_rng"] }
 
 # Internal crates
 ww-core = { path = "crates/ww-core" }

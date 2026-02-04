@@ -1,0 +1,14 @@
+[package]
+name = "ww-simulation"
+description = "Tick-based world simulation for Weltenwanderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ww-core = { workspace = true }
+rand = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

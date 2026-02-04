@@ -89,10 +89,10 @@
 
 ## M4: World Simulation
 
-- [ ] `ww-simulation` crate
-- [ ] Tick-based simulation loop
-- [ ] NPC needs and schedules
-- [ ] Physics / spatial simulation
+- [x] `ww-simulation` crate
+- [x] Tick-based simulation loop
+- [x] NPC needs and schedules
+- [x] Physics / spatial simulation
 
 ## M5: Interactive Fiction Engine
 
