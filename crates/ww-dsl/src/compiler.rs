@@ -371,6 +371,26 @@ impl<'a> Compiler<'a> {
         prefix: &str,
         body: &[Spanned<Statement>],
     ) {
+        // Special handling for simulation "needs" block
+        if prefix == "needs" {
+            let comp = entity
+                .components
+                .simulation
+                .get_or_insert_with(Default::default);
+            let mut needs_map = std::collections::HashMap::new();
+            for stmt in body {
+                if let Statement::Property(prop) = &stmt.node
+                    && let Some(val) = self.value_as_float(&prop.value)
+                {
+                    needs_map.insert(prop.key.clone(), val);
+                }
+            }
+            if !needs_map.is_empty() {
+                comp.initial_needs = Some(needs_map);
+            }
+            return;
+        }
+
         for stmt in body {
             match &stmt.node {
                 Statement::Property(prop) => {
@@ -551,6 +571,41 @@ impl<'a> Compiler<'a> {
                 true
             }
 
+            // Simulation fields
+            "speed" => {
+                let comp = entity
+                    .components
+                    .simulation
+                    .get_or_insert_with(Default::default);
+                comp.speed = self.value_as_float(&prop.value);
+                true
+            }
+            "schedule" => {
+                if let Value::List(entries) = &prop.value {
+                    let comp = entity
+                        .components
+                        .simulation
+                        .get_or_insert_with(Default::default);
+                    let mut schedule = Vec::new();
+                    for entry in entries {
+                        if let Value::List(tuple) = &entry.node
+                            && tuple.len() >= 3
+                        {
+                            let start = self.value_as_float(&tuple[0].node).unwrap_or(0.0);
+                            let end = self.value_as_float(&tuple[1].node).unwrap_or(0.0);
+                            let activity = self.value_as_string(&tuple[2].node).unwrap_or_default();
+                            schedule.push(SimScheduleEntry {
+                                start_hour: start,
+                                end_hour: end,
+                                activity,
+                            });
+                        }
+                    }
+                    comp.schedule = Some(schedule);
+                }
+                true
+            }
+
             // "type" is polymorphic — applies to the relevant component
             "type" => {
                 if let Some(s) = self.value_as_string(&prop.value) {
@@ -601,6 +656,14 @@ impl<'a> Compiler<'a> {
             Value::Float(n) => Some(n.to_string()),
             Value::Boolean(b) => Some(b.to_string()),
             Value::List(_) => None,
+        }
+    }
+
+    fn value_as_float(&self, value: &Value) -> Option<f64> {
+        match value {
+            Value::Float(f) => Some(*f),
+            Value::Integer(i) => Some(*i as f64),
+            _ => None,
         }
     }
 
@@ -1072,5 +1135,107 @@ the Great Sundering is an event {
         assert_eq!(counts[&EntityKind::Event], 50);
         assert_eq!(counts[&EntityKind::Item], 50);
         assert_eq!(counts[&EntityKind::Lore], 50);
+    }
+
+    // -----------------------------------------------------------------------
+    // Simulation config tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn compile_simulation_speed() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+    speed 2.5
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let sim = entity.components.simulation.as_ref().unwrap();
+        assert!((sim.speed.unwrap() - 2.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn compile_simulation_needs() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+    needs {
+        hunger 0.8
+        rest 0.5
+        social 1.0
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let sim = entity.components.simulation.as_ref().unwrap();
+        let needs = sim.initial_needs.as_ref().unwrap();
+        assert!((needs["hunger"] - 0.8).abs() < f64::EPSILON);
+        assert!((needs["rest"] - 0.5).abs() < f64::EPSILON);
+        assert!((needs["social"] - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn compile_simulation_schedule() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+    schedule [
+        [6, 12, "work"],
+        [12, 13, "eat"],
+        [22, 6, "rest"]
+    ]
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let sim = entity.components.simulation.as_ref().unwrap();
+        let sched = sim.schedule.as_ref().unwrap();
+        assert_eq!(sched.len(), 3);
+        assert!((sched[0].start_hour - 6.0).abs() < f64::EPSILON);
+        assert!((sched[0].end_hour - 12.0).abs() < f64::EPSILON);
+        assert_eq!(sched[0].activity, "work");
+        assert_eq!(sched[2].activity, "rest");
+    }
+
+    #[test]
+    fn compile_simulation_full() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+    status alive
+    speed 1.5
+    needs {
+        hunger 0.9
+        rest 0.7
+    }
+    schedule [
+        [5, 6, "eat"],
+        [6, 14, "patrol"],
+        [21, 5, "rest"]
+    ]
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let sim = entity.components.simulation.as_ref().unwrap();
+
+        // Speed
+        assert!((sim.speed.unwrap() - 1.5).abs() < f64::EPSILON);
+
+        // Needs
+        let needs = sim.initial_needs.as_ref().unwrap();
+        assert_eq!(needs.len(), 2);
+        assert!((needs["hunger"] - 0.9).abs() < f64::EPSILON);
+
+        // Schedule
+        let sched = sim.schedule.as_ref().unwrap();
+        assert_eq!(sched.len(), 3);
+        assert_eq!(sched[1].activity, "patrol");
     }
 }

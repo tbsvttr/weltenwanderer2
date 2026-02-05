@@ -26,6 +26,9 @@ pub struct ComponentSet {
     /// Lore data for myths, legends, and world knowledge.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lore: Option<LoreComponent>,
+    /// Simulation-specific data (schedule, needs, speed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simulation: Option<SimulationComponent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +226,36 @@ pub struct LoreComponent {
     pub source: Option<String>,
     /// How trustworthy this lore is, e.g. "verified", "disputed", "legend".
     pub reliability: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Simulation
+// ---------------------------------------------------------------------------
+
+/// A single schedule time slot for simulation.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SimScheduleEntry {
+    /// Start hour (0.0-24.0).
+    pub start_hour: f64,
+    /// End hour (0.0-24.0); may be less than start for midnight wrap.
+    pub end_hour: f64,
+    /// Activity name (e.g., "eat", "work", "rest").
+    pub activity: String,
+}
+
+/// Simulation-specific data for characters.
+///
+/// This component stores configuration that the simulation crate reads
+/// to customize character behavior. All fields are optional; when absent,
+/// the simulation uses default values.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SimulationComponent {
+    /// Custom schedule entries; if None, uses default NPC schedule.
+    pub schedule: Option<Vec<SimScheduleEntry>>,
+    /// Initial need levels (0.0-1.0); if None, starts at 1.0.
+    pub initial_needs: Option<HashMap<String, f64>>,
+    /// Movement speed in edges per tick; if None, uses default 1.0.
+    pub speed: Option<f64>,
 }
 
 #[cfg(test)]

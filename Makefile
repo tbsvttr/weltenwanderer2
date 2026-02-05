@@ -1,11 +1,15 @@
-.PHONY: setup check fmt lint test doc deny readme readme-check fix clean
+.PHONY: setup check fmt lint test doc deny readme readme-check fix clean install-lsp
 
 ## Setup — run once after cloning
-setup:
+setup: install-lsp
 	git config core.hooksPath .githooks
 	@echo "Git hooks installed (.githooks/)"
 	@command -v cargo-deny >/dev/null 2>&1 || { echo "Installing cargo-deny..."; cargo install cargo-deny --locked; }
 	@echo "Setup complete."
+
+## Install ww-lsp to ~/.cargo/bin (for VS Code extension)
+install-lsp:
+	cargo install --path crates/ww-lsp --force
 
 ## Run all checks (same as pre-commit hook)
 check: fmt lint test doc deny readme-check

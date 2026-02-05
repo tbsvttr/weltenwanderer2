@@ -111,6 +111,26 @@ impl Schedule {
             ScheduleEntry::new(18.0, 22.0, Activity::Socialize), // Evening
         ])
     }
+
+    /// Create a schedule from SimScheduleEntry list (from DSL).
+    pub fn from_sim_entries(entries: &[ww_core::component::SimScheduleEntry]) -> Self {
+        let sched_entries = entries
+            .iter()
+            .map(|e| {
+                let activity = match e.activity.to_lowercase().as_str() {
+                    "rest" => Activity::Rest,
+                    "work" => Activity::Work,
+                    "eat" => Activity::Eat,
+                    "socialize" => Activity::Socialize,
+                    "patrol" => Activity::Patrol,
+                    "idle" => Activity::Idle,
+                    _ => Activity::Custom(e.activity.clone()),
+                };
+                ScheduleEntry::new(e.start_hour, e.end_hour, activity)
+            })
+            .collect();
+        Self::new(sched_entries)
+    }
 }
 
 /// Maps activities to need satisfaction effects per tick.
@@ -180,7 +200,7 @@ impl System for ScheduleSystem {
     }
 
     fn init(&mut self, ctx: &mut SimContext<'_>) -> SimResult<()> {
-        let alive_chars: Vec<EntityId> = ctx
+        let alive_chars: Vec<_> = ctx
             .world
             .entities_by_kind(&EntityKind::Character)
             .iter()
@@ -190,13 +210,15 @@ impl System for ScheduleSystem {
                     .as_ref()
                     .is_some_and(|c| c.status == CharacterStatus::Alive)
             })
-            .map(|e| e.id)
+            .map(|e| (e.id, e.components.simulation.as_ref()))
             .collect();
 
-        for id in alive_chars {
-            self.schedules
-                .entry(id)
-                .or_insert_with(Schedule::default_npc);
+        for (id, sim_comp) in alive_chars {
+            let schedule = sim_comp
+                .and_then(|s| s.schedule.as_ref())
+                .map(|entries| Schedule::from_sim_entries(entries))
+                .unwrap_or_else(Schedule::default_npc);
+            self.schedules.insert(id, schedule);
         }
         Ok(())
     }

@@ -171,7 +171,7 @@ impl System for NeedsSystem {
     }
 
     fn init(&mut self, ctx: &mut SimContext<'_>) -> SimResult<()> {
-        let alive_chars: Vec<EntityId> = ctx
+        let alive_chars: Vec<_> = ctx
             .world
             .entities_by_kind(&EntityKind::Character)
             .iter()
@@ -181,11 +181,31 @@ impl System for NeedsSystem {
                     .as_ref()
                     .is_some_and(|c| c.status == CharacterStatus::Alive)
             })
-            .map(|e| e.id)
+            .map(|e| (e.id, e.components.simulation.as_ref()))
             .collect();
 
-        for id in alive_chars {
-            self.ensure_tracked(id);
+        for (id, sim_comp) in alive_chars {
+            // Check if entity has custom initial needs
+            if let Some(custom) = sim_comp.and_then(|s| s.initial_needs.as_ref()) {
+                let mut levels = HashMap::new();
+                for (name, val) in custom {
+                    let kind = match name.to_lowercase().as_str() {
+                        "hunger" => NeedKind::Hunger,
+                        "rest" => NeedKind::Rest,
+                        "social" => NeedKind::Social,
+                        "safety" => NeedKind::Safety,
+                        _ => NeedKind::Custom(name.clone()),
+                    };
+                    levels.insert(kind, *val);
+                }
+                // Fill in any missing needs from config at 1.0
+                for need in &self.config.needs {
+                    levels.entry(need.clone()).or_insert(1.0);
+                }
+                self.states.insert(id, NeedState { levels });
+            } else {
+                self.ensure_tracked(id);
+            }
         }
         Ok(())
     }

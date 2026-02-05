@@ -93,6 +93,10 @@
 - [x] Tick-based simulation loop
 - [x] NPC needs and schedules
 - [x] Physics / spatial simulation
+- [x] `ww simulate` CLI command with colored output
+- [x] DSL syntax for simulation config (schedule, needs, speed blocks)
+- [x] CharacterComponent fields for simulation data
+- [x] Simulation systems read from entity components instead of defaults
 
 ## M5: Interactive Fiction Engine
 

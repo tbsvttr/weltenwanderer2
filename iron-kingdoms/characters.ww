@@ -9,6 +9,23 @@ Kael Stormborn is a character {
     allied with Thrain Ironhand
     rival of Vrak the Undying
 
+    -- Simulation config: Kael is a disciplined knight with early schedule
+    speed 1.5
+    schedule [
+        [5, 6, "eat"],
+        [6, 14, "patrol"],
+        [14, 15, "eat"],
+        [15, 20, "work"],
+        [20, 21, "socialize"],
+        [21, 5, "rest"]
+    ]
+    needs {
+        hunger 0.9
+        rest 0.8
+        social 0.5
+        safety 1.0
+    }
+
     """
     A weathered knight who has seen too many battles. His armor
     bears the silver flame of the Order. He speaks little of his

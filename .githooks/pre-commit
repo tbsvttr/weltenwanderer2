@@ -30,4 +30,17 @@ git diff --quiet README.md || {
     exit 1
 }
 
+echo "--- ww-lsp freshness check"
+INSTALLED_LSP="$HOME/.cargo/bin/ww-lsp"
+if [[ -f "$INSTALLED_LSP" ]]; then
+    # Check if any ww-lsp or ww-dsl source is newer than installed binary
+    NEWEST_SRC=$(find crates/ww-lsp crates/ww-dsl crates/ww-core -name '*.rs' -newer "$INSTALLED_LSP" 2>/dev/null | head -1)
+    if [[ -n "$NEWEST_SRC" ]]; then
+        echo "warning: ww-lsp in ~/.cargo/bin is outdated."
+        echo "Run 'make install-lsp' to update the VS Code extension."
+    fi
+else
+    echo "warning: ww-lsp not installed. Run 'make setup' or 'make install-lsp'."
+fi
+
 echo "==> pre-commit: all checks passed."

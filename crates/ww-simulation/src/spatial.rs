@@ -201,14 +201,14 @@ impl System for SpatialSystem {
     }
 
     fn init(&mut self, ctx: &mut SimContext<'_>) -> SimResult<()> {
-        let characters: Vec<EntityId> = ctx
+        let characters: Vec<_> = ctx
             .world
             .entities_by_kind(&EntityKind::Character)
             .iter()
-            .map(|e| e.id)
+            .map(|e| (e.id, e.components.simulation.as_ref()))
             .collect();
 
-        for char_id in characters {
+        for (char_id, sim_comp) in characters {
             let location = ctx
                 .world
                 .relationships_from(char_id)
@@ -217,8 +217,9 @@ impl System for SpatialSystem {
                 .map(|r| r.target);
 
             if let Some(loc_id) = location {
+                let custom_speed = sim_comp.and_then(|s| s.speed);
                 let mut state = SpatialState::at(loc_id);
-                state.speed = self.default_speed;
+                state.speed = custom_speed.unwrap_or(self.default_speed);
                 self.states.insert(char_id, state);
             }
         }
