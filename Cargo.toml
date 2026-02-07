@@ -6,6 +6,7 @@ members = [
     "crates/ww-cli",
     "crates/ww-lsp",
     "crates/ww-simulation",
+    "crates/ww-fiction",
 ]
 
 [workspace.package]
@@ -60,6 +61,8 @@ rand = { version = "0.9", features = ["std_rng"] }
 # Internal crates
 ww-core = { path = "crates/ww-core" }
 ww-dsl = { path = "crates/ww-dsl" }
+ww-simulation = { path = "crates/ww-simulation" }
+ww-fiction = { path = "crates/ww-fiction" }
 
 [workspace.lints.clippy]
 all = { level = "deny" }

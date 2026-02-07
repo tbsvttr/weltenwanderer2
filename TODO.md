@@ -100,10 +100,19 @@
 
 ## M5: Interactive Fiction Engine
 
-- [ ] `ww-fiction` crate
-- [ ] Natural language parser for player input
-- [ ] Choice engine (branching narratives)
-- [ ] Narrator system
+- [x] `ww-fiction` crate (58 tests)
+- [x] Natural language parser for player input (verb synonyms, fuzzy matching)
+- [x] Choice engine (Dialogue, Choice, Condition, Effect, ChoiceState)
+- [x] Narrator system (4 tones, 2 perspectives, template registry)
+- [x] `FictionSession` — interactive game loop with movement, inventory, talk
+- [x] `FictionSystem` — simulation plugin for narrative generation
+- [x] `ww play` CLI command
+- [x] DSL `dialogue` / `choice` block syntax with conditions, effects, goto
+- [x] `FictionComponent` on entities (DialogueData, ChoiceData)
+- [x] Example dialogues for Kael Stormborn and Thrain Ironhand
+- [ ] Choice selection and effect application in `ww play`
+- [ ] Save/load session state
+- [ ] TUI fiction view
 
 ## M6: Game Mechanics
 

@@ -143,6 +143,13 @@ enum Commands {
         dir: PathBuf,
     },
 
+    /// Play an interactive fiction session in the world
+    Play {
+        /// Directory containing .ww files
+        #[arg(short, long, default_value = ".")]
+        dir: PathBuf,
+    },
+
     /// Launch interactive TUI world explorer
     Tui {
         /// Directory containing .ww files
@@ -197,6 +204,7 @@ fn main() {
             verbose,
             dir,
         } => commands::simulate::run(&dir, ticks, seed, speed, verbose),
+        Commands::Play { dir } => commands::play::run(&dir),
         Commands::Tui { dir } => commands::compile_dir_for_tui(&dir).and_then(tui::run),
         Commands::Lsp => {
             // Exec the separate ww-lsp binary

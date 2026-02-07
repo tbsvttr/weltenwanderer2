@@ -31,6 +31,37 @@ Kael Stormborn is a character {
     bears the silver flame of the Order. He speaks little of his
     past, but his sword speaks volumes.
     """
+
+    dialogue "greeting" {
+        text "The knight looks up from sharpening his blade. You seek the Order's aid?"
+
+        choice "Tell me about the Ashlands" {
+            response "His expression darkens. A cursed place. The Sundering twisted the land itself. Nothing grows there, yet something stirs beneath the ash."
+            effect "set knowledge.ashlands true"
+            goto "ashlands_detail"
+        }
+
+        choice "I want to join the Order" {
+            response "He studies you for a long moment. The Order demands sacrifice. We stand between the living and the dead. If you are ready, speak to Thrain about arms."
+            effect "set quest.join_order true"
+        }
+
+        choice "Just passing through" {
+            response "He nods curtly. Safe travels. The roads are not what they were."
+        }
+    }
+
+    dialogue "ashlands_detail" {
+        text "What do you want to know about the Ashlands?"
+
+        choice "What caused the Sundering?" {
+            response "Archmage Thandril. His experiment tore the world apart. Some say fragments of his mind still haunt the Undercrypt."
+        }
+
+        choice "Is Vrak really undying?" {
+            response "He bound his soul to the ash itself during the Sundering. We've killed him thrice. He always returns."
+        }
+    }
 }
 
 Elara Nightwhisper is a character {
@@ -79,6 +110,25 @@ Thrain Ironhand is a character {
     maintains the Order's arsenal. His left hand is a mechanical
     prosthetic of his own design.
     """
+
+    dialogue "greeting" {
+        text "The dwarf glances up from his forge, sparks dancing off his mechanical hand. What do you need?"
+
+        choice "I need a weapon" {
+            response "He grunts approvingly. I can forge you something, but good steel takes time and coin. Come back when you're ready."
+        }
+
+        choice "Tell me about the Blade of First Light" {
+            response "His eyes gleam with pride. My finest work. Forged from ore pulled from the Sundering crater itself. It burns undead on contact."
+            effect "set knowledge.blade_of_first_light true"
+        }
+
+        choice "Kael sent me" {
+            when "player has quest.join_order"
+            response "Ah, so you want to join the Order? Then you'll need proper arms. Let me see what I can fit you with."
+            effect "set quest.armed true"
+        }
+    }
 }
 
 Sable Riven is a character {

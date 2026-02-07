@@ -255,8 +255,9 @@ where
 
     // Statement: recursive to support nested blocks
     let statement = recursive(|stmt| {
-        // Nested block: word { statements }
+        // Nested block: word [string] { statements }
         let block_stmt = word
+            .then(string_lit.or_not())
             .then(
                 stmt.separated_by(nl1.clone())
                     .allow_trailing()
@@ -266,7 +267,7 @@ where
                         nl.clone().then(just(Token::RBrace)),
                     ),
             )
-            .map(|(name, body)| Statement::Block(BlockStmt { name, body }))
+            .map(|((name, arg), body)| Statement::Block(BlockStmt { name, arg, body }))
             .labelled("nested block");
 
         // Try alternatives in order. Block before property to avoid ambiguity.
@@ -905,5 +906,90 @@ the Citadel is a fortress {
             !lex_errors.is_empty() || !parse_errors.is_empty(),
             "expected errors from garbage between declarations"
         );
+    }
+
+    // -- Block with string argument tests --
+
+    #[test]
+    fn parse_block_with_string_arg() {
+        let source =
+            "Kael is a character {\n    dialogue \"greeting\" {\n        text \"Hello.\"\n    }\n}";
+        let ast = parse_source(source).unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => {
+                assert_eq!(e.body.len(), 1);
+                match &e.body[0].node {
+                    Statement::Block(b) => {
+                        assert_eq!(b.name, "dialogue");
+                        assert_eq!(b.arg.as_deref(), Some("greeting"));
+                        assert_eq!(b.body.len(), 1);
+                    }
+                    other => panic!("expected block, got {other:?}"),
+                }
+            }
+            _ => panic!("expected entity"),
+        }
+    }
+
+    #[test]
+    fn parse_block_without_string_arg() {
+        let source = "the Citadel is a fortress {\n    defenses {\n        garrison 500\n    }\n}";
+        let ast = parse_source(source).unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => match &e.body[0].node {
+                Statement::Block(b) => {
+                    assert_eq!(b.name, "defenses");
+                    assert!(b.arg.is_none());
+                }
+                other => panic!("expected block, got {other:?}"),
+            },
+            _ => panic!("expected entity"),
+        }
+    }
+
+    #[test]
+    fn parse_dialogue_with_nested_choices() {
+        let source = r#"Kael is a character {
+    dialogue "greeting" {
+        text "Hello, traveler."
+
+        choice "Ask about the quest" {
+            response "The quest is perilous."
+            goto "quest_details"
+        }
+
+        choice "Leave" {
+            response "Farewell."
+        }
+    }
+}"#;
+        let ast = parse_source(source).unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => {
+                assert_eq!(e.body.len(), 1);
+                match &e.body[0].node {
+                    Statement::Block(dlg) => {
+                        assert_eq!(dlg.name, "dialogue");
+                        assert_eq!(dlg.arg.as_deref(), Some("greeting"));
+                        // text + 2 choice blocks = 3 statements
+                        assert_eq!(dlg.body.len(), 3);
+
+                        // First choice block
+                        match &dlg.body[1].node {
+                            Statement::Block(choice) => {
+                                assert_eq!(choice.name, "choice");
+                                assert_eq!(choice.arg.as_deref(), Some("Ask about the quest"));
+                            }
+                            other => panic!("expected choice block, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected dialogue block, got {other:?}"),
+                }
+            }
+            _ => panic!("expected entity"),
+        }
     }
 }

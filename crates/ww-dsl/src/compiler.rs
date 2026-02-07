@@ -163,7 +163,12 @@ impl<'a> Compiler<'a> {
                     self.apply_date(&mut entity, date);
                 }
                 Statement::Block(block) => {
-                    self.apply_block_properties(&mut entity, &block.name, &block.body);
+                    self.apply_block_properties(
+                        &mut entity,
+                        &block.name,
+                        block.arg.as_deref(),
+                        &block.body,
+                    );
                 }
                 // Relationships handled in pass 2
                 Statement::Relationship(_) | Statement::Exit(_) => {}
@@ -352,7 +357,12 @@ impl<'a> Compiler<'a> {
                             self.apply_date(entity, date);
                         }
                         Statement::Block(block) => {
-                            self.apply_block_properties(entity, &block.name, &block.body);
+                            self.apply_block_properties(
+                                entity,
+                                &block.name,
+                                block.arg.as_deref(),
+                                &block.body,
+                            );
                         }
                         // Don't inherit relationships or exits
                         Statement::Relationship(_) | Statement::Exit(_) => {}
@@ -369,6 +379,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         entity: &mut Entity,
         prefix: &str,
+        arg: Option<&str>,
         body: &[Spanned<Statement>],
     ) {
         // Special handling for simulation "needs" block
@@ -391,6 +402,12 @@ impl<'a> Compiler<'a> {
             return;
         }
 
+        // Special handling for "dialogue" blocks
+        if prefix == "dialogue" {
+            self.apply_dialogue_block(entity, arg, body);
+            return;
+        }
+
         for stmt in body {
             match &stmt.node {
                 Statement::Property(prop) => {
@@ -400,7 +417,12 @@ impl<'a> Compiler<'a> {
                 }
                 Statement::Block(inner) => {
                     let nested_prefix = format!("{prefix}.{}", inner.name);
-                    self.apply_block_properties(entity, &nested_prefix, &inner.body);
+                    self.apply_block_properties(
+                        entity,
+                        &nested_prefix,
+                        inner.arg.as_deref(),
+                        &inner.body,
+                    );
                 }
                 Statement::Description(text) => {
                     let key = format!("{prefix}.description");
@@ -421,6 +443,104 @@ impl<'a> Compiler<'a> {
                     ));
                 }
             }
+        }
+    }
+
+    fn apply_dialogue_block(
+        &mut self,
+        entity: &mut Entity,
+        arg: Option<&str>,
+        body: &[Spanned<Statement>],
+    ) {
+        let id = arg.unwrap_or("default").to_string();
+        let mut text = String::new();
+        let mut conditions = Vec::new();
+        let mut choices = Vec::new();
+
+        for stmt in body {
+            match &stmt.node {
+                Statement::Property(prop) => match prop.key.as_str() {
+                    "text" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            text = s;
+                        }
+                    }
+                    "when" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            conditions.push(s);
+                        }
+                    }
+                    _ => {}
+                },
+                Statement::Description(t) => {
+                    text.clone_from(t);
+                }
+                Statement::Block(choice_block) if choice_block.name == "choice" => {
+                    choices.push(self.compile_choice_block(choice_block));
+                }
+                _ => {}
+            }
+        }
+
+        let dialogue = DialogueData {
+            id,
+            text,
+            conditions,
+            choices,
+        };
+
+        let comp = entity
+            .components
+            .fiction
+            .get_or_insert_with(Default::default);
+        comp.dialogues.push(dialogue);
+    }
+
+    fn compile_choice_block(&self, block: &BlockStmt) -> ChoiceData {
+        let choice_text = block.arg.clone().unwrap_or_default();
+        let mut response = String::new();
+        let mut effects = Vec::new();
+        let mut conditions = Vec::new();
+        let mut goto = None;
+
+        for stmt in &block.body {
+            match &stmt.node {
+                Statement::Property(prop) => match prop.key.as_str() {
+                    "response" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            response = s;
+                        }
+                    }
+                    "effect" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            effects.push(s);
+                        }
+                    }
+                    "when" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            conditions.push(s);
+                        }
+                    }
+                    "goto" => {
+                        if let Some(s) = self.value_as_string(&prop.value) {
+                            goto = Some(s);
+                        }
+                    }
+                    _ => {}
+                },
+                Statement::Description(t) => {
+                    response.clone_from(t);
+                }
+                _ => {}
+            }
+        }
+
+        ChoiceData {
+            text: choice_text,
+            response,
+            effects,
+            conditions,
+            goto,
         }
     }
 
@@ -1237,5 +1357,149 @@ the Great Sundering is an event {
         let sched = sim.schedule.as_ref().unwrap();
         assert_eq!(sched.len(), 3);
         assert_eq!(sched[1].activity, "patrol");
+    }
+
+    // -----------------------------------------------------------------------
+    // Dialogue compilation tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn compile_dialogue_basic() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+
+    dialogue "greeting" {
+        text "The knight looks up."
+
+        choice "Ask about the Ashlands" {
+            response "A cursed place."
+            effect "set knowledge.ashlands true"
+            goto "ashlands_branch"
+        }
+
+        choice "Leave" {
+            response "He nods curtly."
+        }
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let fiction = entity.components.fiction.as_ref().unwrap();
+        assert_eq!(fiction.dialogues.len(), 1);
+
+        let dlg = &fiction.dialogues[0];
+        assert_eq!(dlg.id, "greeting");
+        assert_eq!(dlg.text, "The knight looks up.");
+        assert_eq!(dlg.choices.len(), 2);
+
+        assert_eq!(dlg.choices[0].text, "Ask about the Ashlands");
+        assert_eq!(dlg.choices[0].response, "A cursed place.");
+        assert_eq!(dlg.choices[0].effects, vec!["set knowledge.ashlands true"]);
+        assert_eq!(dlg.choices[0].goto.as_deref(), Some("ashlands_branch"));
+
+        assert_eq!(dlg.choices[1].text, "Leave");
+        assert_eq!(dlg.choices[1].response, "He nods curtly.");
+        assert!(dlg.choices[1].goto.is_none());
+    }
+
+    #[test]
+    fn compile_dialogue_with_docstring() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+
+    dialogue "greeting" {
+        """
+        The knight looks up from sharpening his blade.
+        "You seek the Order's aid?"
+        """
+
+        choice "Yes" {
+            """
+            "Your courage is noted."
+            """
+        }
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let fiction = entity.components.fiction.as_ref().unwrap();
+        let dlg = &fiction.dialogues[0];
+        assert!(dlg.text.contains("sharpening"));
+        assert!(dlg.choices[0].response.contains("courage"));
+    }
+
+    #[test]
+    fn compile_dialogue_with_conditions() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+
+    dialogue "secret" {
+        when "player has knowledge.ashlands"
+        text "I see you know about the Ashlands."
+
+        choice "Tell me more" {
+            when "not player.offered_help"
+            response "It was once a thriving kingdom..."
+            effect "set player.offered_help true"
+        }
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let fiction = entity.components.fiction.as_ref().unwrap();
+        let dlg = &fiction.dialogues[0];
+        assert_eq!(dlg.conditions, vec!["player has knowledge.ashlands"]);
+        assert_eq!(dlg.choices[0].conditions, vec!["not player.offered_help"]);
+    }
+
+    #[test]
+    fn compile_multiple_dialogues() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+
+    dialogue "greeting" {
+        text "Hello there."
+    }
+
+    dialogue "farewell" {
+        text "Goodbye."
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let fiction = entity.components.fiction.as_ref().unwrap();
+        assert_eq!(fiction.dialogues.len(), 2);
+        assert_eq!(fiction.dialogues[0].id, "greeting");
+        assert_eq!(fiction.dialogues[1].id, "farewell");
+    }
+
+    #[test]
+    fn compile_dialogue_default_id() {
+        let result = compile_source(
+            r#"Kael is a character {
+    species human
+
+    dialogue {
+        text "Hello."
+    }
+}"#,
+        );
+        assert!(!result.has_errors(), "errors: {:?}", result.diagnostics);
+
+        let entity = result.world.find_by_name("Kael").unwrap();
+        let fiction = entity.components.fiction.as_ref().unwrap();
+        assert_eq!(fiction.dialogues[0].id, "default");
     }
 }

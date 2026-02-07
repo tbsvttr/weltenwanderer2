@@ -1,0 +1,15 @@
+[package]
+name = "ww-fiction"
+description = "Interactive fiction engine for Weltenwanderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ww-core = { workspace = true }
+ww-simulation = { workspace = true }
+thiserror = { workspace = true }
+strsim = "0.11"
+
+[lints]
+workspace = true

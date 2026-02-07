@@ -13,6 +13,7 @@ path = "src/main.rs"
 ww-core = { workspace = true }
 ww-dsl = { workspace = true }
 ww-simulation = { path = "../ww-simulation" }
+ww-fiction = { workspace = true }
 clap = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }

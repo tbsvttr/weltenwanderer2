@@ -5,6 +5,7 @@ pub mod graph;
 pub mod init;
 pub mod list;
 pub mod new;
+pub mod play;
 pub mod search;
 pub mod show;
 pub mod simulate;

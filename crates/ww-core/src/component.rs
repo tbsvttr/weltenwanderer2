@@ -29,6 +29,9 @@ pub struct ComponentSet {
     /// Simulation-specific data (schedule, needs, speed).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub simulation: Option<SimulationComponent>,
+    /// Interactive fiction data (dialogues, choices).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fiction: Option<FictionComponent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +259,48 @@ pub struct SimulationComponent {
     pub initial_needs: Option<HashMap<String, f64>>,
     /// Movement speed in edges per tick; if None, uses default 1.0.
     pub speed: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
+// Fiction
+// ---------------------------------------------------------------------------
+
+/// Fiction/interactive-narrative data attached to an entity.
+///
+/// Stores dialogue trees and other interactive fiction content defined
+/// via the DSL `dialogue` blocks.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FictionComponent {
+    /// Dialogue trees associated with this entity.
+    pub dialogues: Vec<DialogueData>,
+}
+
+/// A single dialogue tree defined in the DSL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DialogueData {
+    /// Unique identifier for this dialogue (e.g. "greeting").
+    pub id: String,
+    /// The spoken text or narration.
+    pub text: String,
+    /// Optional conditions that must be met to trigger this dialogue.
+    pub conditions: Vec<String>,
+    /// Player choices available in this dialogue.
+    pub choices: Vec<ChoiceData>,
+}
+
+/// A single player choice within a dialogue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChoiceData {
+    /// Display text for this choice.
+    pub text: String,
+    /// Response text when this choice is selected.
+    pub response: String,
+    /// Raw effect strings (e.g. "set knowledge.ashlands true").
+    pub effects: Vec<String>,
+    /// Optional conditions for this choice to be available.
+    pub conditions: Vec<String>,
+    /// Optional dialogue ID to branch to after this choice.
+    pub goto: Option<String>,
 }
 
 #[cfg(test)]

@@ -141,6 +141,8 @@ pub struct ExitStmt {
 pub struct BlockStmt {
     /// The block name used as a namespace prefix.
     pub name: String,
+    /// Optional string argument, e.g. `dialogue "greeting" { ... }`.
+    pub arg: Option<String>,
     /// The statements contained in the block.
     pub body: Vec<Spanned<Statement>>,
 }
