@@ -1,0 +1,30 @@
+-- Stellar Drift uses a Trophy Gold-style system.
+-- Roll d6 pools with light dice (yours) and dark dice (the void).
+-- The highest single die determines the outcome.
+-- If the highest die is dark, your Ruin increases.
+
+the Stellar Drift Rules is a ruleset {
+    mechanics {
+        system "trophy_gold"
+        check_die "d6"
+        pool_size 1
+        resolution "highest_die"
+        partial_min 4
+        success_min 6
+        dark_die_penalty true
+
+        attributes ["Grit", "Reflex", "Nerve", "Wit"]
+        skills ["Piloting", "Salvage", "Combat", "Tech", "Survival", "Negotiate"]
+        tracks ["Ruin:6:1", "Credits:100:0", "Cargo:6:0"]
+        flags ["dark_die_ruin"]
+    }
+
+    """
+    In the Drift, survival is a gamble. Characters roll pools of d6s — light
+    dice represent skill and luck, dark dice represent the void's influence.
+    Only the highest die matters: 1-3 is failure, 4-5 is a partial success
+    (you get what you want at a cost), and 6 is a clean success. But if your
+    highest die is dark, the Cascade takes its toll — your Ruin increases,
+    and when Ruin reaches 6, the void claims you.
+    """
+}

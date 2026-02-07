@@ -1,0 +1,24 @@
+the Takeda Clan is a faction {
+    type clan
+    based at Autumn Gate Castle
+    values [loyalty, duty, tradition]
+
+    """
+    The oldest surviving clan in the region, the Takeda have held
+    Autumn Gate for seven generations. They are known for their
+    discipline and adherence to the old codes of bushido. Their
+    influence wanes as younger clans grow bolder.
+    """
+}
+
+the Mori Remnants is a faction {
+    type clan
+    values [ambition, cunning, revenge]
+
+    """
+    The scattered survivors of the Mori clan, destroyed in the
+    Succession War a decade past. They operate as a network of
+    ronin, smugglers, and assassins, united only by their shared
+    grudge against those who divided their lands.
+    """
+}

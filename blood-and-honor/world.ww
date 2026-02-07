@@ -1,0 +1,5 @@
+world "Crimson Leaves" {
+    description "A feudal Japan-inspired setting where samurai clans vie for power in the shadow of a dying emperor."
+    author "Weltenwanderer"
+    version "0.1"
+}

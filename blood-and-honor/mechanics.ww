@@ -1,0 +1,29 @@
+-- Crimson Leaves uses a Blood & Honor system.
+-- Roll a pool of d6s, sum the total, and try to beat target number 10.
+-- Players can wager dice for higher stakes — risking more to gain more.
+-- Glory and Honor track a samurai's reputation and moral standing.
+
+the Crimson Leaves Rules is a ruleset {
+    mechanics {
+        system "blood_and_honor"
+        check_die "d6"
+        pool_size 3
+        resolution "sum_pool"
+        target_number 10
+        wager_bonus 0
+
+        attributes ["Beauty", "Courage", "Cunning", "Prowess", "Strength", "Wisdom"]
+        skills ["Art", "Etiquette", "Hunting", "Warfare", "Athletics", "Intimidate", "Medicine", "Stealth"]
+        tracks ["Glory:10:0", "Honor:10:0", "Wounds:5:0"]
+        flags ["wager_system"]
+    }
+
+    """
+    In the world of Crimson Leaves, samurai resolve conflicts by rolling
+    pools of d6s and summing the result against a target of 10. Before
+    rolling, a samurai may wager dice — setting them aside to gain bonus
+    raises on a success, but losing them entirely on failure. Glory measures
+    a samurai's fame and deeds, while Honor reflects adherence to bushido.
+    A samurai with no Honor is ronin; one with no Glory is forgotten.
+    """
+}

@@ -7,6 +7,19 @@ Captain Rynn Vasik is a character {
     located at the Meridian Hub
     allied with Dr Asha Lien
 
+    mechanics {
+        grit 3
+        reflex 2
+        nerve 3
+        wit 2
+        piloting 3
+        combat 2
+        negotiate 1
+        survival 2
+        focuses ["Evasive Maneuvers"]
+        ruin 2
+    }
+
     """
     Captain of the salvage vessel Wayward Sun. She lost her
     previous crew to a Cascade event near the Hollows and
@@ -21,6 +34,18 @@ Dr Asha Lien is a character {
     traits [curious, meticulous, stubborn]
     located at the Meridian Hub
     allied with Captain Rynn Vasik
+
+    mechanics {
+        grit 1
+        reflex 1
+        nerve 2
+        wit 4
+        tech 3
+        survival 2
+        salvage 1
+        negotiate 1
+        focuses ["Xenobiology", "Cascade Phenomena"]
+    }
 
     """
     A xenobiologist studying the organisms that thrive inside
@@ -37,6 +62,17 @@ Khet is a character {
     member of the Freerunner Collective
     located at the Wayward Sun
 
+    mechanics {
+        grit 2
+        reflex 3
+        nerve 2
+        wit 3
+        piloting 4
+        survival 2
+        tech 1
+        focuses ["Gravity Sense", "Drift Navigation"]
+    }
+
     """
     A Sythari navigator who perceives gravity fields the way
     humans perceive color. Indispensable for threading the
@@ -52,6 +88,17 @@ Director Maren Cole is a character {
     member of the Helios Mandate
     located at the Meridian Hub
     rival of Captain Rynn Vasik
+
+    mechanics {
+        grit 2
+        reflex 1
+        nerve 3
+        wit 3
+        negotiate 4
+        combat 1
+        tech 2
+        focuses ["Bureaucracy", "Intimidation"]
+    }
 
     """
     Director of the Helios Mandate's frontier operations. She

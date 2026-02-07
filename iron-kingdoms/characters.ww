@@ -9,6 +9,22 @@ Kael Stormborn is a character {
     allied with Thrain Ironhand
     rival of Vrak the Undying
 
+    -- Mechanics: strong melee combatant, trained commander
+    mechanics {
+        agility 9
+        brawn 12
+        coordination 10
+        insight 8
+        reason 7
+        will 10
+        melee 4
+        athletics 3
+        command 2
+        survival 2
+        observation 1
+        focuses ["Blade", "Heavy Armor"]
+    }
+
     -- Simulation config: Kael is a disciplined knight with early schedule
     speed 1.5
     schedule [
@@ -72,6 +88,20 @@ Elara Nightwhisper is a character {
     located at the Silverpine Forest
     allied with Sable Riven
 
+    mechanics {
+        agility 8
+        brawn 6
+        coordination 7
+        insight 12
+        reason 11
+        will 10
+        lore 4
+        observation 3
+        persuade 2
+        stealth 1
+        focuses ["Arcana", "History"]
+    }
+
     """
     An elven scholar who has studied the Sundering for centuries.
     She believes the key to preventing another cataclysm lies
@@ -88,6 +118,20 @@ Vrak the Undying is a character {
     rival of the Order of Dawn
     located at the Ashlands
 
+    mechanics {
+        agility 7
+        brawn 8
+        coordination 6
+        insight 11
+        reason 12
+        will 14
+        lore 5
+        stealth 3
+        command 3
+        observation 2
+        focuses ["Necromancy", "Dark Pacts"]
+    }
+
     """
     Once a mortal sorcerer, Vrak survived the Sundering by binding
     his soul to the ash itself. He seeks to finish what the
@@ -103,6 +147,20 @@ Thrain Ironhand is a character {
     member of the Silver Compact
     located at Dawnwatch Keep
     allied with Kael Stormborn
+
+    mechanics {
+        agility 7
+        brawn 11
+        coordination 12
+        insight 9
+        reason 10
+        will 8
+        craft 5
+        melee 2
+        athletics 2
+        observation 1
+        focuses ["Smithing", "Mechanika"]
+    }
 
     """
     Master artificer of Dawnwatch Keep and the finest weaponsmith
@@ -140,6 +198,20 @@ Sable Riven is a character {
     located at Dawnwatch Keep
     allied with Elara Nightwhisper
     rival of Vrak the Undying
+
+    mechanics {
+        agility 12
+        brawn 7
+        coordination 10
+        insight 10
+        reason 9
+        will 8
+        stealth 5
+        observation 4
+        persuade 3
+        acrobatics 2
+        focuses ["Disguise", "Lockpicking"]
+    }
 
     """
     An intelligence operative for the Silver Compact who trades

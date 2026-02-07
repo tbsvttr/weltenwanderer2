@@ -116,11 +116,14 @@
 
 ## M6: Game Mechanics
 
-- [ ] `ww-mechanics` crate
-- [ ] Dice system and probability
-- [ ] Character sheets and stats
-- [ ] Rules engine
-- [ ] Combat system
+- [x] `ww-mechanics` crate (80 tests)
+- [x] Dice system (Die, DicePool, DiceTag, RollResult with aggregation)
+- [x] Resolution strategies (CountSuccesses, HighestDie, SumPool)
+- [x] Character sheets and tracks (from_entity reads mechanics.* properties)
+- [x] Rules engine (RuleSet.from_world loads DSL-configured systems)
+- [x] Three presets: 2d20 (Modiphius), Trophy Gold, Blood & Honor
+- [x] Combat system (participants, zones, initiative, actions, event log)
+- [ ] CLI commands (`ww roll`, `ww check`, `ww combat`)
 
 ## M7: Solo TTRPG Runner
 

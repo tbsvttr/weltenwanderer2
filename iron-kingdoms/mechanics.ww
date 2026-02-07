@@ -1,0 +1,28 @@
+-- Iron Kingdoms uses a 2d20 system (Modiphius-style).
+-- Roll 2d20, count successes at or below the target number.
+-- Natural 1 scores two successes. Momentum banks extra successes.
+
+the Iron Kingdoms Rules is a ruleset {
+    mechanics {
+        system "2d20"
+        check_die "d20"
+        pool_size 2
+        resolution "count_successes"
+        target_number 10
+        critical_threshold 1
+        successes_needed 1
+
+        attributes ["Agility", "Brawn", "Coordination", "Insight", "Reason", "Will"]
+        skills ["Athletics", "Acrobatics", "Melee", "Ranged", "Stealth", "Observation", "Survival", "Persuade", "Command", "Lore", "Craft"]
+        tracks ["Momentum:6:0", "Stress:5:0", "Wounds:5:0"]
+        flags ["momentum_economy"]
+    }
+
+    """
+    The Iron Kingdoms use a 2d20 resolution system. Characters test an
+    attribute (target number) with two d20s, counting each die that rolls
+    at or equal to the attribute as a success. Rolling a natural 1 scores
+    two successes. Extra successes beyond what is needed generate Momentum,
+    a shared resource that can be spent for bonus dice or narrative advantages.
+    """
+}

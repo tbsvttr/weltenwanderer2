@@ -15,6 +15,7 @@ ww-dsl = { workspace = true }
 ww-simulation = { path = "../ww-simulation" }
 ww-fiction = { workspace = true }
 ww-solo = { workspace = true }
+ww-mechanics = { workspace = true }
 clap = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }

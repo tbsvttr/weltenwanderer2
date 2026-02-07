@@ -1,0 +1,56 @@
+Autumn Gate Castle is a fortress {
+    climate temperate
+    population 3200
+
+    east to the Withered Market
+    north to the Temple of Falling Leaves
+
+    """
+    Seat of the Takeda clan, built where a mountain river forks
+    around an ancient maple grove. The castle's walls are painted
+    the deep red of autumn leaves — a tradition said to ward off
+    vengeful spirits. In spring, petals drift through the corridors
+    like snow.
+    """
+}
+
+the Withered Market is a town {
+    climate temperate
+    population 800
+
+    west to Autumn Gate Castle
+    north to the Crimson Pass
+
+    """
+    A crossroads town that has changed hands between clans so many
+    times that its people owe allegiance to no one. Ronin, merchants,
+    and spies mingle freely in its narrow streets. The sake houses
+    here know more secrets than any court.
+    """
+}
+
+the Temple of Falling Leaves is a landmark {
+    climate temperate
+
+    south to Autumn Gate Castle
+
+    """
+    A mountain temple surrounded by ancient maples that shed
+    crimson leaves year-round, regardless of season. The monks
+    here practice a form of meditation said to let them hear
+    the voices of the dead.
+    """
+}
+
+the Crimson Pass is a wilderness {
+    climate cold
+
+    south to the Withered Market
+
+    """
+    A treacherous mountain pass stained red by iron-rich stone.
+    Bandits and deserters haunt its narrow defiles. In winter,
+    the pass becomes impassable, cutting the northern provinces
+    off from the south.
+    """
+}

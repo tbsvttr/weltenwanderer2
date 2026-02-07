@@ -1,0 +1,24 @@
+the Succession War is an event {
+    date year -10, era "Age of Crimson Leaves"
+    type war
+    involving [the Takeda Clan, the Mori Remnants]
+
+    """
+    A brutal civil war triggered by the death of the old Emperor
+    without a clear heir. The Takeda and Mori clans fought for
+    three years before the Mori were broken at the Battle of
+    Red Creek. The survivors scattered, becoming ronin.
+    """
+}
+
+the Emperor's Silence is an event {
+    date year 0, era "Age of Crimson Leaves"
+    type political
+
+    """
+    The current Emperor has not spoken publicly in over a year.
+    Rumors spread that he is gravely ill — or already dead, with
+    his advisors ruling in his name. The clans prepare for what
+    may come next.
+    """
+}

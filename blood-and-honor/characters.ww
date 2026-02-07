@@ -1,0 +1,125 @@
+Takeda Haruki is a character {
+    species human
+    occupation samurai
+    status alive
+    traits [honorable, steadfast, melancholy]
+    member of the Takeda Clan
+    located at Autumn Gate Castle
+    allied with Yuki no Tsubasa
+    rival of Mori Kazuya
+
+    mechanics {
+        beauty 2
+        courage 4
+        cunning 2
+        prowess 4
+        strength 3
+        wisdom 3
+        warfare 3
+        athletics 2
+        intimidate 1
+        focuses ["Katana", "Horseback"]
+        honor 8
+        glory 6
+    }
+
+    """
+    A veteran samurai of the Takeda clan, Haruki has served three
+    lords and survived two succession wars. His blade is swift
+    but his heart grows weary. He fights now not for glory but
+    to protect what little peace remains.
+    """
+}
+
+Yuki no Tsubasa is a character {
+    species human
+    occupation courtier
+    status alive
+    traits [graceful, perceptive, ambitious]
+    member of the Takeda Clan
+    located at Autumn Gate Castle
+    allied with Takeda Haruki
+
+    mechanics {
+        beauty 4
+        courage 2
+        cunning 4
+        prowess 1
+        strength 1
+        wisdom 3
+        etiquette 4
+        art 3
+        stealth 2
+        focuses ["Court Intrigue", "Calligraphy"]
+        honor 7
+        glory 5
+    }
+
+    """
+    Known as "Snow Wing" for her white robes, Yuki is the Takeda
+    clan's most skilled diplomat. Her poetry conceals coded messages,
+    and her tea ceremonies have ended more conflicts than any sword.
+    """
+}
+
+Mori Kazuya is a character {
+    species human
+    occupation ronin
+    status alive
+    traits [ruthless, clever, scarred]
+    rival of Takeda Haruki
+    located at the Withered Market
+
+    mechanics {
+        beauty 1
+        courage 3
+        cunning 4
+        prowess 3
+        strength 3
+        wisdom 2
+        warfare 2
+        stealth 3
+        intimidate 3
+        hunting 1
+        focuses ["Ambush", "Poisons"]
+        honor 1
+        glory 4
+    }
+
+    """
+    A disgraced former samurai of the Mori clan who was cast out
+    for assassinating a rival during a peace ceremony. He sells
+    his sword to the highest bidder and harbors a deep grudge
+    against the Takeda for their role in his exile.
+    """
+}
+
+the Crimson Abbot is a character {
+    species human
+    occupation monk
+    status alive
+    traits [serene, enigmatic, ancient]
+    located at the Temple of Falling Leaves
+
+    mechanics {
+        beauty 3
+        courage 3
+        cunning 2
+        prowess 2
+        strength 2
+        wisdom 5
+        medicine 4
+        art 2
+        etiquette 2
+        focuses ["Herbal Medicine", "Prophecy"]
+        honor 9
+        glory 3
+    }
+
+    """
+    The head priest of the Temple of Falling Leaves, said to be
+    over a hundred years old. He speaks in riddles and tends a
+    garden that blooms in every season. Those who seek his counsel
+    must first answer a question of his own.
+    """
+}
