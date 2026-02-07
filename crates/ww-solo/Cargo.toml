@@ -1,0 +1,18 @@
+[package]
+name = "ww-solo"
+description = "Solo TTRPG runner with Mythic GME-inspired oracle for Weltenwanderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ww-core = { workspace = true }
+ww-fiction = { workspace = true }
+rand = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

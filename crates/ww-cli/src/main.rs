@@ -150,6 +150,21 @@ enum Commands {
         dir: PathBuf,
     },
 
+    /// Run a solo TTRPG session with oracle, scenes, and journaling
+    Solo {
+        /// Directory containing .ww files
+        #[arg(short, long, default_value = ".")]
+        dir: PathBuf,
+
+        /// RNG seed for oracle rolls
+        #[arg(short, long, default_value = "42")]
+        seed: u64,
+
+        /// Initial chaos factor (1-9, default: 5)
+        #[arg(short, long, default_value = "5")]
+        chaos: u32,
+    },
+
     /// Launch interactive TUI world explorer
     Tui {
         /// Directory containing .ww files
@@ -205,6 +220,7 @@ fn main() {
             dir,
         } => commands::simulate::run(&dir, ticks, seed, speed, verbose),
         Commands::Play { dir } => commands::play::run(&dir),
+        Commands::Solo { dir, seed, chaos } => commands::solo::run(&dir, seed, chaos),
         Commands::Tui { dir } => commands::compile_dir_for_tui(&dir).and_then(tui::run),
         Commands::Lsp => {
             // Exec the separate ww-lsp binary

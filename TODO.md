@@ -124,7 +124,12 @@
 
 ## M7: Solo TTRPG Runner
 
-- [ ] `ww-solo` crate
-- [ ] Oracle tables (yes/no, event, NPC reaction)
-- [ ] Journaling system
-- [ ] Scene management
+- [x] `ww-solo` crate (93 tests)
+- [x] Oracle tables (fate chart, random events, NPC reaction)
+- [x] Journaling system (append, export markdown/text)
+- [x] Scene management (chaos check, altered/interrupted scenes)
+- [x] Thread and NPC tracking
+- [x] `ww solo` CLI command with interactive REPL
+- [x] Auto-populate NPC tracker from world characters (skip dead)
+- [x] DSL syntax for custom oracle tables (`oracle { actions [...] subjects [...] }`)
+- [ ] Save/load session state

@@ -9,6 +9,7 @@ pub mod play;
 pub mod search;
 pub mod show;
 pub mod simulate;
+pub mod solo;
 pub mod timeline;
 
 use std::path::Path;

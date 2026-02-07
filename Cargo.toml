@@ -7,6 +7,7 @@ members = [
     "crates/ww-lsp",
     "crates/ww-simulation",
     "crates/ww-fiction",
+    "crates/ww-solo",
 ]
 
 [workspace.package]
@@ -63,6 +64,7 @@ ww-core = { path = "crates/ww-core" }
 ww-dsl = { path = "crates/ww-dsl" }
 ww-simulation = { path = "crates/ww-simulation" }
 ww-fiction = { path = "crates/ww-fiction" }
+ww-solo = { path = "crates/ww-solo" }
 
 [workspace.lints.clippy]
 all = { level = "deny" }
