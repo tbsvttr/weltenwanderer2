@@ -1,0 +1,22 @@
+[package]
+name = "ww-gui"
+description = "Pixel art GUI for Weltenwanderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ww-gui"
+path = "src/main.rs"
+
+[dependencies]
+ww-core = { workspace = true }
+ww-dsl = { workspace = true }
+ww-fiction = { workspace = true }
+ww-solo = { workspace = true }
+ww-mechanics = { workspace = true }
+macroquad = { workspace = true }
+rand = { workspace = true }
+
+[lints]
+workspace = true

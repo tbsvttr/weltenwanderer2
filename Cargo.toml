@@ -9,6 +9,7 @@ members = [
     "crates/ww-fiction",
     "crates/ww-solo",
     "crates/ww-mechanics",
+    "crates/ww-gui",
 ]
 
 [workspace.package]
@@ -60,6 +61,9 @@ tokio = { version = "1", features = ["full"] }
 # Simulation
 rand = { version = "0.9", features = ["std_rng"] }
 
+# GUI
+macroquad = "0.4"
+
 # Internal crates
 ww-core = { path = "crates/ww-core" }
 ww-dsl = { path = "crates/ww-dsl" }
@@ -67,6 +71,7 @@ ww-simulation = { path = "crates/ww-simulation" }
 ww-fiction = { path = "crates/ww-fiction" }
 ww-solo = { path = "crates/ww-solo" }
 ww-mechanics = { path = "crates/ww-mechanics" }
+ww-gui = { path = "crates/ww-gui" }
 
 [workspace.lints.clippy]
 all = { level = "deny" }
