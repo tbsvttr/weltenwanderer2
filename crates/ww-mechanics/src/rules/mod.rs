@@ -15,7 +15,9 @@ use ww_core::world::World;
 
 use crate::dice::{DicePool, DiceTag, Die, RollResult};
 use crate::error::{MechError, MechResult};
-use crate::resolution::{self, CountSuccesses, HighestDie, Outcome, ResolutionStrategy, SumPool};
+use crate::resolution::{
+    self, CountSuccesses, HighestDie, Outcome, ResolutionStrategy, RollUnder, SumPool,
+};
 
 /// Definition of a resource track in a ruleset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -234,6 +236,15 @@ fn apply_check_modifiers(
                 highest.success_min = difficulty;
             }
         }
+        ResolutionStrategy::RollUnder(ru) => {
+            // In roll-under: the attribute value IS the target number
+            if let Some(ref attr) = request.attribute {
+                ru.target_number = sheet.attribute(attr)?;
+            }
+            if let Some(difficulty) = request.difficulty {
+                ru.target_number = difficulty;
+            }
+        }
     }
 
     Ok(strategy)
@@ -399,6 +410,10 @@ fn build_resolution(
                 target_number,
                 wager_bonus,
             }))
+        }
+        "roll_under" | "mothership" => {
+            let target_number = extract_u32(props, "mechanics.target_number").unwrap_or(50);
+            Ok(ResolutionStrategy::RollUnder(RollUnder { target_number }))
         }
         other => Err(MechError::InvalidConfig(format!(
             "unknown resolution type: {other}"

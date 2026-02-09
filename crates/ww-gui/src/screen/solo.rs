@@ -55,13 +55,15 @@ impl SoloScreen {
 
         match SoloSession::new(world.clone(), SoloConfig::default()) {
             Ok(mut session) => {
+                self.output_log = session.intro();
                 // Initial look
                 match session.process("look") {
                     Ok(output) => {
-                        self.output_log = output;
+                        self.output_log.push('\n');
+                        self.output_log.push_str(&output);
                     }
                     Err(e) => {
-                        self.output_log = format!("Error: {e}");
+                        self.output_log.push_str(&format!("Error: {e}"));
                     }
                 }
                 self.session = Some(session);
@@ -79,8 +81,9 @@ impl Screen for SoloScreen {
             self.initialize(app);
         }
 
+        // ESC: scroll to top
         if is_key_pressed(KeyCode::Escape) {
-            return Transition::Pop;
+            self.scroll = 0;
         }
 
         // Mouse: tab click
@@ -205,6 +208,40 @@ impl Screen for SoloScreen {
         if let Some(session) = &self.session {
             let mut y = sb_inner.y;
 
+            // System info
+            if let Some(rs) = session.ruleset() {
+                let sys_text = format!("{} ({})", rs.name, rs.check_die);
+                draw_pixel_text(&app.font, &sys_text, sb_inner.x, y, palette::BLUE);
+                y += 12.0;
+            }
+
+            // Character stats
+            if let Some(sheet) = session.sheet() {
+                draw_pixel_text(&app.font, &sheet.name, sb_inner.x, y, palette::WHITE);
+                y += 10.0;
+
+                // Attributes (abbreviated)
+                let mut attrs: Vec<_> = sheet.attributes.iter().collect();
+                attrs.sort_by_key(|(k, _)| (*k).clone());
+                for (name, value) in &attrs {
+                    let abbr: String = name.chars().take(3).collect();
+                    let text = format!("{abbr}:{value}");
+                    draw_pixel_text(&app.font, &text, sb_inner.x, y, palette::LIGHT_GRAY);
+                    y += 10.0;
+                }
+
+                // Tracks as bars
+                let mut tracks: Vec<_> = sheet.tracks.iter().collect();
+                tracks.sort_by_key(|(k, _)| (*k).clone());
+                for (name, track) in &tracks {
+                    let text = format!("{name}: {}/{}", track.current, track.max);
+                    draw_pixel_text(&app.font, &text, sb_inner.x, y, palette::GREEN);
+                    y += 10.0;
+                }
+
+                y += 6.0;
+            }
+
             // Chaos factor
             let chaos_text = format!("Chaos: {}/9", session.chaos().value());
             draw_pixel_text(&app.font, &chaos_text, sb_inner.x, y, palette::ORANGE);
@@ -264,7 +301,7 @@ impl Screen for SoloScreen {
         // Status bar
         draw_pixel_text(
             &app.font,
-            "Enter: send | help: commands | Esc: back",
+            "Enter: send | Esc: top | help: commands",
             2.0,
             CANVAS_H - 10.0,
             palette::DARK_GRAY,

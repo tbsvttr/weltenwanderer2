@@ -75,4 +75,28 @@ pub enum JournalEntry {
         /// When generated.
         timestamp: DateTime<Utc>,
     },
+    /// A mechanics check (attribute test using world's ruleset).
+    MechanicsCheck {
+        /// Attribute or skill checked.
+        attribute: String,
+        /// Dice expression that was rolled.
+        dice: String,
+        /// Individual die values.
+        values: Vec<u32>,
+        /// The resolved outcome (e.g., "Success", "Critical Failure").
+        outcome: String,
+        /// When rolled.
+        timestamp: DateTime<Utc>,
+    },
+    /// A freeform dice roll (not tied to a check).
+    DiceRoll {
+        /// Dice expression (e.g., "2d6", "d100").
+        expression: String,
+        /// Individual die values.
+        values: Vec<u32>,
+        /// Sum of all dice.
+        total: u32,
+        /// When rolled.
+        timestamp: DateTime<Utc>,
+    },
 }

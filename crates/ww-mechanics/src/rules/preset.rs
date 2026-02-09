@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use crate::dice::Die;
-use crate::resolution::{CountSuccesses, HighestDie, ResolutionStrategy, SumPool};
+use crate::resolution::{CountSuccesses, HighestDie, ResolutionStrategy, RollUnder, SumPool};
 use crate::rules::{RuleSet, TrackDefinition};
 
 /// 2d20 system (Modiphius-style).
@@ -164,6 +164,51 @@ pub fn blood_and_honor() -> RuleSet {
     }
 }
 
+/// Mothership RPG system.
+///
+/// Roll 1d100 under the attribute value. Doubles under = critical success,
+/// doubles over = critical failure. Stats are percentage-based (10-99).
+pub fn mothership() -> RuleSet {
+    RuleSet {
+        name: "mothership".to_string(),
+        check_die: Die::D100,
+        default_pool_size: 1,
+        resolution: ResolutionStrategy::RollUnder(RollUnder { target_number: 50 }),
+        attributes: vec![
+            "Strength".to_string(),
+            "Speed".to_string(),
+            "Intellect".to_string(),
+            "Combat".to_string(),
+        ],
+        skills: vec![
+            "Industrial Equipment".to_string(),
+            "Zero-G".to_string(),
+            "Mechanical Repair".to_string(),
+            "Computers".to_string(),
+            "First Aid".to_string(),
+            "Firearms".to_string(),
+        ],
+        track_definitions: vec![
+            TrackDefinition {
+                name: "Health".to_string(),
+                default_max: 10,
+                min: 0,
+            },
+            TrackDefinition {
+                name: "Stress".to_string(),
+                default_max: 20,
+                min: 0,
+            },
+            TrackDefinition {
+                name: "Wounds".to_string(),
+                default_max: 3,
+                min: 0,
+            },
+        ],
+        flags: HashSet::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,8 +253,18 @@ mod tests {
     }
 
     #[test]
+    fn mothership_preset() {
+        let rs = mothership();
+        assert_eq!(rs.name, "mothership");
+        assert_eq!(rs.check_die, Die::D100);
+        assert_eq!(rs.default_pool_size, 1);
+        assert_eq!(rs.attributes.len(), 4);
+        assert!(matches!(rs.resolution, ResolutionStrategy::RollUnder(_)));
+    }
+
+    #[test]
     fn presets_have_tracks() {
-        for rs in [two_d20(), trophy_gold(), blood_and_honor()] {
+        for rs in [two_d20(), trophy_gold(), blood_and_honor(), mothership()] {
             assert!(
                 !rs.track_definitions.is_empty(),
                 "{} has no track definitions",

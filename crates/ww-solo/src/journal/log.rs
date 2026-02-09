@@ -98,6 +98,31 @@ impl Journal {
                 JournalEntry::RandomEvent { description, .. } => {
                     out.push_str(&format!("*Random Event*: {description}\n\n"));
                 }
+                JournalEntry::MechanicsCheck {
+                    attribute,
+                    dice,
+                    values,
+                    outcome,
+                    ..
+                } => {
+                    let vals: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                    out.push_str(&format!(
+                        "**Check** ({attribute}): {dice} = [{}] — **{outcome}**\n\n",
+                        vals.join(", ")
+                    ));
+                }
+                JournalEntry::DiceRoll {
+                    expression,
+                    values,
+                    total,
+                    ..
+                } => {
+                    let vals: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                    out.push_str(&format!(
+                        "**Roll** {expression}: [{}] = {total}\n\n",
+                        vals.join(", ")
+                    ));
+                }
             }
         }
         out
@@ -164,6 +189,31 @@ impl Journal {
                 }
                 JournalEntry::RandomEvent { description, .. } => {
                     out.push_str(&format!("Random Event: {description}\n\n"));
+                }
+                JournalEntry::MechanicsCheck {
+                    attribute,
+                    dice,
+                    values,
+                    outcome,
+                    ..
+                } => {
+                    let vals: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                    out.push_str(&format!(
+                        "Check ({attribute}): {dice} = [{}] — {outcome}\n\n",
+                        vals.join(", ")
+                    ));
+                }
+                JournalEntry::DiceRoll {
+                    expression,
+                    values,
+                    total,
+                    ..
+                } => {
+                    let vals: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                    out.push_str(&format!(
+                        "Roll {expression}: [{}] = {total}\n\n",
+                        vals.join(", ")
+                    ));
                 }
             }
         }
@@ -281,5 +331,86 @@ mod tests {
         let json = serde_json::to_string(&j).unwrap();
         let j2: Journal = serde_json::from_str(&json).unwrap();
         assert_eq!(j2.len(), 1);
+    }
+
+    #[test]
+    fn export_markdown_mechanics_check() {
+        let mut j = Journal::new();
+        j.append(JournalEntry::MechanicsCheck {
+            attribute: "Strength".to_string(),
+            dice: "1xd100".to_string(),
+            values: vec![42],
+            outcome: "Success (margin 8)".to_string(),
+            timestamp: Utc::now(),
+        });
+        let md = j.export_markdown();
+        assert!(md.contains("**Check** (Strength)"));
+        assert!(md.contains("[42]"));
+        assert!(md.contains("**Success (margin 8)**"));
+    }
+
+    #[test]
+    fn export_text_mechanics_check() {
+        let mut j = Journal::new();
+        j.append(JournalEntry::MechanicsCheck {
+            attribute: "Speed".to_string(),
+            dice: "1xd100".to_string(),
+            values: vec![71],
+            outcome: "Failure".to_string(),
+            timestamp: Utc::now(),
+        });
+        let txt = j.export_text();
+        assert!(txt.contains("Check (Speed)"));
+        assert!(txt.contains("Failure"));
+    }
+
+    #[test]
+    fn export_markdown_dice_roll() {
+        let mut j = Journal::new();
+        j.append(JournalEntry::DiceRoll {
+            expression: "2d6".to_string(),
+            values: vec![3, 5],
+            total: 8,
+            timestamp: Utc::now(),
+        });
+        let md = j.export_markdown();
+        assert!(md.contains("**Roll** 2d6"));
+        assert!(md.contains("[3, 5]"));
+        assert!(md.contains("= 8"));
+    }
+
+    #[test]
+    fn export_text_dice_roll() {
+        let mut j = Journal::new();
+        j.append(JournalEntry::DiceRoll {
+            expression: "d20".to_string(),
+            values: vec![17],
+            total: 17,
+            timestamp: Utc::now(),
+        });
+        let txt = j.export_text();
+        assert!(txt.contains("Roll d20"));
+        assert!(txt.contains("= 17"));
+    }
+
+    #[test]
+    fn serde_roundtrip_mechanics_entries() {
+        let mut j = Journal::new();
+        j.append(JournalEntry::MechanicsCheck {
+            attribute: "Combat".to_string(),
+            dice: "1xd100".to_string(),
+            values: vec![55],
+            outcome: "Critical Failure".to_string(),
+            timestamp: Utc::now(),
+        });
+        j.append(JournalEntry::DiceRoll {
+            expression: "3d6".to_string(),
+            values: vec![2, 4, 6],
+            total: 12,
+            timestamp: Utc::now(),
+        });
+        let json = serde_json::to_string(&j).unwrap();
+        let j2: Journal = serde_json::from_str(&json).unwrap();
+        assert_eq!(j2.len(), 2);
     }
 }

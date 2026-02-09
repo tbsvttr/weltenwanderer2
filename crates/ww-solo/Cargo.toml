@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 ww-core = { workspace = true }
 ww-fiction = { workspace = true }
+ww-mechanics = { workspace = true }
 rand = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }

@@ -68,8 +68,8 @@ pub fn handle_tab_click(mx: f32, my: f32, active: usize) -> Option<Transition> {
         0 => Some(Transition::Replace(ScreenId::Explorer)),
         1 => Some(Transition::Replace(ScreenId::Graph)),
         2 => Some(Transition::Replace(ScreenId::Timeline)),
-        3 => Some(Transition::Push(ScreenId::Play)),
-        4 => Some(Transition::Push(ScreenId::Solo)),
+        3 => Some(Transition::Replace(ScreenId::Play)),
+        4 => Some(Transition::Replace(ScreenId::Solo)),
         _ => None,
     }
 }

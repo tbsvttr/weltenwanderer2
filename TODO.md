@@ -60,33 +60,6 @@
 - [x] Expand with more characters, deeper relationships, complex dates
 - [x] Add a second example world demonstrating custom entity kinds (stellar-drift/)
 
-### ww-server — not started
-
-- [ ] Axum HTTP API crate
-- [ ] CRUD endpoints for entities and relationships
-- [ ] Search, graph, and timeline API endpoints
-- [ ] Serve static web UI assets
-
-### Web UI — not started
-
-- [ ] React + Vite + TypeScript frontend
-- [ ] React Flow graph visualization
-- [ ] Markdown editor for entity descriptions
-- [ ] TanStack Query for data fetching
-- [ ] Dashboard with world overview
-
-### ww-wasm — not started
-
-- [ ] WebAssembly bindings for ww-core
-- [ ] ts-rs for Rust-to-TypeScript type sharing
-
-## M2: AI Integration
-
-- [ ] `ww-ai` crate — provider abstraction
-- [ ] Anthropic provider
-- [ ] OpenAI provider
-- [ ] Ollama provider (local models)
-
 ## M4: World Simulation
 
 - [x] `ww-simulation` crate
@@ -154,4 +127,9 @@
 
 ## Real-World Scenarios
 
-- [ ] Run "A Thousand Empty Light" for a friend via screen sharing with Weltenwanderer
+- [ ] Run "A Thousand Empty Light" for a friend via screen sharing
+  - [x] DSL parser supports numbers in entity names (Section 1, UPB 154, TEL 022)
+  - [x] GUI Play and Solo tabs reachable from all screens
+  - [ ] Welcome text / onboarding when entering Play and Solo screens
+  - [ ] Play status bar should mention `help` command
+  - [ ] Solo screen needs guided first steps (start scene, oracle usage)

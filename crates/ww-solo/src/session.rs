@@ -10,9 +10,10 @@ use rand::rngs::StdRng;
 
 use ww_core::World;
 use ww_fiction::FictionSession;
+use ww_mechanics::{CharacterSheet, CheckRequest, DicePool, Die, RuleSet};
 
 use crate::chaos::ChaosFactor;
-use crate::config::SoloConfig;
+use crate::config::{SoloConfig, SoloWorldConfig};
 use crate::error::{SoloError, SoloResult};
 use crate::journal::entry::JournalEntry;
 use crate::journal::log::Journal;
@@ -35,6 +36,9 @@ pub struct SoloSession {
     threads: ThreadList,
     npcs: NpcList,
     rng: StdRng,
+    ruleset: Option<RuleSet>,
+    sheet: Option<CharacterSheet>,
+    world_config: SoloWorldConfig,
 }
 
 impl SoloSession {
@@ -44,7 +48,20 @@ impl SoloSession {
         let rng = StdRng::seed_from_u64(config.seed);
         let chaos = ChaosFactor::new(config.initial_chaos);
         let oracle_config = OracleConfig::from_world(fiction.world());
-        let npcs = NpcList::from_world(fiction.world());
+        let npcs = NpcList::new();
+
+        let world_config = SoloWorldConfig::from_world_meta(&fiction.world().meta.properties);
+
+        // Try to load mechanics (optional — worlds without mechanics still work)
+        let ruleset = RuleSet::from_world(fiction.world()).ok();
+        let sheet = ruleset.as_ref().and_then(|rs| {
+            fiction
+                .world()
+                .all_entities()
+                .filter(|e| e.kind == ww_core::EntityKind::Character)
+                .filter(|e| e.properties.keys().any(|k| k.starts_with("mechanics.")))
+                .find_map(|e| CharacterSheet::from_entity(e, rs).ok())
+        });
 
         Ok(Self {
             fiction,
@@ -56,6 +73,9 @@ impl SoloSession {
             threads: ThreadList::new(),
             npcs,
             rng,
+            ruleset,
+            sheet,
+            world_config,
         })
     }
 
@@ -89,6 +109,66 @@ impl SoloSession {
         self.current_scene.as_ref()
     }
 
+    /// Get the loaded ruleset, if any.
+    pub fn ruleset(&self) -> Option<&RuleSet> {
+        self.ruleset.as_ref()
+    }
+
+    /// Get the character sheet, if any.
+    pub fn sheet(&self) -> Option<&CharacterSheet> {
+        self.sheet.as_ref()
+    }
+
+    /// Get the world-level solo configuration.
+    pub fn world_config(&self) -> &SoloWorldConfig {
+        &self.world_config
+    }
+
+    /// Get the solo session intro/welcome text.
+    ///
+    /// Returns custom text from the world's `solo { intro "..." }` block
+    /// if defined, otherwise generates a context-aware default based on
+    /// whether the world has a ruleset and character sheet.
+    pub fn intro(&self) -> String {
+        if let Some(ref text) = self.world_config.intro {
+            return text.clone();
+        }
+        self.default_intro()
+    }
+
+    fn default_intro(&self) -> String {
+        if let Some(rs) = &self.ruleset {
+            let mut welcome = format!("**Solo TTRPG Session** — {} system\n\n", rs.name,);
+            if let Some(sheet) = &self.sheet {
+                welcome.push_str(&format!(
+                    "Playing as **{}** ({})\n\n",
+                    sheet.name, rs.check_die,
+                ));
+            }
+            welcome.push_str(
+                "**Explore** the world, use the **oracle** when\n\
+                 you need answers, **roll** when it gets risky.\n\n\
+                 **Explore:** look, move, examine, talk\n\
+                 **Oracle:** ask <question>, scene <setup>\n\
+                 **Mechanics:** check <attr>, roll <dice>, sheet\n\
+                 **Journal:** note <text>, journal, status\n\n\
+                 Type 'help' for all commands.\n\n",
+            );
+            welcome
+        } else {
+            String::from(
+                "**Solo TTRPG Session**\n\
+                 A Mythic GME-inspired oracle for solo play.\n\n\
+                 **Explore** the world, use the **oracle** when\n\
+                 you need answers.\n\n\
+                 **Explore:** look, move, examine, talk\n\
+                 **Oracle:** ask <question>, scene <setup>\n\
+                 **Journal:** note <text>, journal, status\n\n\
+                 Type 'help' for all commands.\n\n",
+            )
+        }
+    }
+
     /// Process a line of user input and return a response.
     pub fn process(&mut self, input: &str) -> SoloResult<String> {
         let trimmed = input.trim();
@@ -120,6 +200,9 @@ impl SoloSession {
             "note" => self.do_note(rest),
             "journal" => self.do_journal_show(),
             "export" => self.do_journal_export(rest),
+            "check" => self.do_check(rest),
+            "roll" => self.do_roll(rest),
+            "sheet" => self.do_sheet(),
             "status" => self.do_status(),
             "help" => self.do_help(rest),
             "quit" | "q" => Ok("Goodbye!".to_string()),
@@ -142,14 +225,17 @@ impl SoloSession {
             &self.oracle_config,
         );
 
-        let mut output = format!(
-            "Oracle ({}, chaos {}): {} (roll {} vs {})",
-            likelihood,
-            self.chaos.value(),
-            result.answer,
-            result.roll,
-            result.target,
-        );
+        let mut output = if let Some(ref prefix) = self.world_config.oracle_prefix {
+            format!(
+                "{prefix} {}\n[{}, d100: {} vs {}]",
+                result.answer, likelihood, result.roll, result.target,
+            )
+        } else {
+            format!(
+                "Oracle: {}\n[{}, d100: {} vs {}]",
+                result.answer, likelihood, result.roll, result.target,
+            )
+        };
 
         let random_event_str = if let Some(ref event) = result.random_event {
             let desc = event.to_string();
@@ -413,6 +499,130 @@ impl SoloSession {
         }
     }
 
+    fn do_check(&mut self, rest: &str) -> SoloResult<String> {
+        let Some(ruleset) = &self.ruleset else {
+            return Err(SoloError::InvalidChoice(
+                "no game mechanics defined in this world".to_string(),
+            ));
+        };
+        let Some(sheet) = &self.sheet else {
+            return Err(SoloError::InvalidChoice(
+                "no character with mechanics found".to_string(),
+            ));
+        };
+
+        let (attribute, modifier) = parse_check_input(rest)?;
+
+        let request = CheckRequest {
+            attribute: Some(attribute.clone()),
+            modifier,
+            ..CheckRequest::default()
+        };
+
+        let result = ww_mechanics::rules::perform_check(ruleset, sheet, &request, &mut self.rng)?;
+
+        let values: Vec<u32> = result.roll.dice.iter().map(|d| d.value).collect();
+        let vals_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+        let dice_desc = format!("{}x{}", result.roll.dice.len(), ruleset.check_die);
+
+        let mut output = format!(
+            "Check {attribute}: {dice_desc} = [{}] — {outcome}",
+            vals_str.join(", "),
+            outcome = result.outcome,
+        );
+
+        for effect in &result.effects {
+            output.push_str(&format!("\n  {effect}"));
+        }
+
+        self.journal.append(JournalEntry::MechanicsCheck {
+            attribute,
+            dice: dice_desc,
+            values,
+            outcome: result.outcome.to_string(),
+            timestamp: Utc::now(),
+        });
+
+        Ok(output)
+    }
+
+    fn do_roll(&mut self, rest: &str) -> SoloResult<String> {
+        let (count, die) = parse_dice_expression(rest)?;
+
+        let pool = DicePool::new().add(die, count);
+        let roll = pool.roll(&mut self.rng);
+
+        let values: Vec<u32> = roll.dice.iter().map(|d| d.value).collect();
+        let total: u32 = values.iter().sum();
+        let vals_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+        let expression = format!("{count}{die}");
+
+        let output = format!("Roll {expression}: [{}] = {total}", vals_str.join(", "));
+
+        self.journal.append(JournalEntry::DiceRoll {
+            expression,
+            values,
+            total,
+            timestamp: Utc::now(),
+        });
+
+        Ok(output)
+    }
+
+    fn do_sheet(&self) -> SoloResult<String> {
+        let Some(ruleset) = &self.ruleset else {
+            return Err(SoloError::InvalidChoice(
+                "no game mechanics defined in this world".to_string(),
+            ));
+        };
+        let Some(sheet) = &self.sheet else {
+            return Err(SoloError::InvalidChoice(
+                "no character with mechanics found".to_string(),
+            ));
+        };
+
+        let mut out = format!(
+            "Character: {}\nSystem: {} ({})\n\n",
+            sheet.name, ruleset.name, ruleset.check_die
+        );
+
+        if !sheet.attributes.is_empty() {
+            out.push_str("Attributes:\n");
+            let mut attrs: Vec<_> = sheet.attributes.iter().collect();
+            attrs.sort_by_key(|(k, _)| (*k).clone());
+            for (name, value) in &attrs {
+                out.push_str(&format!("  {name}: {value}\n"));
+            }
+            out.push('\n');
+        }
+
+        if !sheet.skills.is_empty() {
+            out.push_str("Skills:\n");
+            let mut skills: Vec<_> = sheet.skills.iter().collect();
+            skills.sort_by_key(|(k, _)| (*k).clone());
+            for (name, value) in &skills {
+                out.push_str(&format!("  {name}: {value}\n"));
+            }
+            out.push('\n');
+        }
+
+        if !sheet.tracks.is_empty() {
+            out.push_str("Tracks:\n");
+            let mut tracks: Vec<_> = sheet.tracks.iter().collect();
+            tracks.sort_by_key(|(k, _)| (*k).clone());
+            for (name, track) in &tracks {
+                out.push_str(&format!("  {name}: {}/{}\n", track.current, track.max));
+            }
+            out.push('\n');
+        }
+
+        if !sheet.focuses.is_empty() {
+            out.push_str(&format!("Focuses: {}\n", sheet.focuses.join(", ")));
+        }
+
+        Ok(out.trim_end().to_string())
+    }
+
     fn do_status(&self) -> SoloResult<String> {
         let mut out = format!("Chaos Factor: {}/9\n", self.chaos.value());
 
@@ -426,9 +636,16 @@ impl SoloSession {
             self.threads.active_count()
         ));
         out.push_str(&format!("NPCs: {} tracked\n", self.npcs.count()));
-        out.push_str(&format!("Journal: {} entries", self.journal.len()));
+        out.push_str(&format!("Journal: {} entries\n", self.journal.len()));
 
-        Ok(out)
+        if let Some(rs) = &self.ruleset {
+            out.push_str(&format!("System: {} ({})\n", rs.name, rs.check_die));
+        }
+        if let Some(sheet) = &self.sheet {
+            out.push_str(&format!("Character: {}", sheet.name));
+        }
+
+        Ok(out.trim_end().to_string())
     }
 
     fn do_help(&self, topic: &str) -> SoloResult<String> {
@@ -467,6 +684,15 @@ Journal Commands:
   journal                       Show recent entries
   export [markdown|text]        Export full journal"
                 .to_string()),
+            "mechanics" | "check" | "roll" | "sheet" => Ok("\
+Mechanics Commands:
+  check <attribute> [modifier]  Roll a check using world rules
+  roll <dice>                   Roll dice (e.g., d100, 2d6, d20)
+  sheet                         Show character attributes and tracks"
+                .to_string()),
+            _ if self.world_config.help.is_some() => {
+                Ok(self.world_config.help.as_ref().unwrap().clone())
+            }
             _ => Ok("\
 Solo TTRPG Commands:
   ask [likelihood] <question>   Consult the oracle
@@ -474,6 +700,9 @@ Solo TTRPG Commands:
   event                         Force a random event
   scene <setup>                 Start a new scene
   end scene [well|badly] <text> End current scene
+  check <attribute> [modifier]  Roll a mechanics check
+  roll <dice>                   Roll dice (d100, 2d6, d20)
+  sheet                         Show character sheet
   thread add|close|remove       Manage plot threads
   threads                       List threads
   npc add|remove                Manage NPCs
@@ -482,7 +711,7 @@ Solo TTRPG Commands:
   journal                       Show journal
   export [markdown|text]        Export journal
   status                        Show session status
-  help [topic]                  Show help (oracle, scene, thread, npc, journal)
+  help [topic]                  Show help (oracle, scene, mechanics, ...)
   quit                          Exit
 
 World interaction (forwarded to fiction engine):
@@ -519,6 +748,69 @@ fn parse_oracle_input(input: &str) -> SoloResult<(Likelihood, &str)> {
 
     // Default to 50/50
     Ok((Likelihood::FiftyFifty, input))
+}
+
+/// Parse check input: `<attribute> [modifier]`
+fn parse_check_input(input: &str) -> SoloResult<(String, i32)> {
+    if input.is_empty() {
+        return Err(SoloError::InvalidChoice(
+            "usage: check <attribute> [modifier]".to_string(),
+        ));
+    }
+    let parts: Vec<&str> = input.splitn(2, ' ').collect();
+    let attribute = capitalize_first(parts[0]);
+    let modifier = parts
+        .get(1)
+        .and_then(|s| s.trim().parse::<i32>().ok())
+        .unwrap_or(0);
+    Ok((attribute, modifier))
+}
+
+/// Parse a dice expression like "d100", "2d6", "d20".
+fn parse_dice_expression(input: &str) -> SoloResult<(u32, Die)> {
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Err(SoloError::InvalidChoice(
+            "usage: roll <dice> (e.g., d100, 2d6, d20)".to_string(),
+        ));
+    }
+
+    // Split on 'd' to get count and sides
+    let parts: Vec<&str> = input.splitn(2, 'd').collect();
+    if parts.len() != 2 || parts[1].is_empty() {
+        return Err(SoloError::InvalidChoice(format!(
+            "invalid dice expression: {input}"
+        )));
+    }
+
+    let count = if parts[0].is_empty() {
+        1
+    } else {
+        parts[0]
+            .parse::<u32>()
+            .map_err(|_| SoloError::InvalidChoice(format!("invalid dice count: {}", parts[0])))?
+    };
+
+    if count == 0 {
+        return Err(SoloError::InvalidChoice(
+            "dice count must be at least 1".to_string(),
+        ));
+    }
+
+    let die_str = format!("d{}", parts[1]);
+    let die = Die::from_str_tag(&die_str)
+        .ok_or_else(|| SoloError::InvalidChoice(format!("invalid die type: {die_str}")))?;
+
+    Ok((count, die))
+}
+
+/// Capitalize the first letter of a string.
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+    }
 }
 
 /// Parse scene end: `[well|badly] summary`
@@ -559,8 +851,9 @@ mod tests {
     fn oracle_query() {
         let mut s = test_session();
         let output = s.process("ask likely Is there a guard?").unwrap();
-        assert!(output.contains("Oracle"));
-        assert!(output.contains("chaos 5"));
+        assert!(output.contains("Oracle:"));
+        assert!(output.contains("d100:"));
+        assert!(output.contains("Likely"));
         assert_eq!(s.journal().len(), 1);
     }
 
@@ -773,7 +1066,7 @@ mod tests {
     }
 
     #[test]
-    fn session_auto_populates_npcs() {
+    fn session_starts_with_empty_npcs() {
         let mut world = World::new(WorldMeta::new("Test World"));
         let tavern = Entity::new(EntityKind::Location, "the Tavern");
         world.add_entity(tavern).unwrap();
@@ -783,7 +1076,331 @@ mod tests {
         world.add_entity(guard).unwrap();
 
         let session = SoloSession::new(world, SoloConfig::default()).unwrap();
-        assert_eq!(session.npcs().count(), 1);
-        assert_eq!(session.npcs().list()[0].name, "Guard Captain");
+        assert_eq!(session.npcs().count(), 0);
+    }
+
+    // --- Mechanics integration tests ---
+
+    use ww_core::entity::MetadataValue;
+
+    fn mechanics_world() -> World {
+        let mut world = World::new(WorldMeta::new("Mechanics World"));
+        let tavern = Entity::new(EntityKind::Location, "the Tavern");
+        world.add_entity(tavern).unwrap();
+
+        // Ruleset entity
+        let mut rules = Entity::new(EntityKind::Custom("ruleset".to_string()), "Game Rules");
+        rules.properties.insert(
+            "mechanics.system".to_string(),
+            MetadataValue::String("mothership".to_string()),
+        );
+        rules.properties.insert(
+            "mechanics.check_die".to_string(),
+            MetadataValue::String("d100".to_string()),
+        );
+        rules
+            .properties
+            .insert("mechanics.pool_size".to_string(), MetadataValue::Integer(1));
+        rules.properties.insert(
+            "mechanics.resolution".to_string(),
+            MetadataValue::String("roll_under".to_string()),
+        );
+        rules.properties.insert(
+            "mechanics.attributes".to_string(),
+            MetadataValue::List(vec![
+                MetadataValue::String("Strength".to_string()),
+                MetadataValue::String("Speed".to_string()),
+                MetadataValue::String("Intellect".to_string()),
+                MetadataValue::String("Combat".to_string()),
+            ]),
+        );
+        rules.properties.insert(
+            "mechanics.tracks".to_string(),
+            MetadataValue::List(vec![
+                MetadataValue::String("Health:10:0".to_string()),
+                MetadataValue::String("Stress:20:0".to_string()),
+            ]),
+        );
+        world.add_entity(rules).unwrap();
+
+        // Character entity
+        let mut character = Entity::new(EntityKind::Character, "Lamplighter");
+        character.components.character = Some(ww_core::component::CharacterComponent::default());
+        character
+            .properties
+            .insert("mechanics.strength".to_string(), MetadataValue::Integer(30));
+        character
+            .properties
+            .insert("mechanics.speed".to_string(), MetadataValue::Integer(35));
+        character.properties.insert(
+            "mechanics.intellect".to_string(),
+            MetadataValue::Integer(40),
+        );
+        character
+            .properties
+            .insert("mechanics.combat".to_string(), MetadataValue::Integer(25));
+        world.add_entity(character).unwrap();
+
+        world
+    }
+
+    fn mechanics_session() -> SoloSession {
+        SoloSession::new(mechanics_world(), SoloConfig::default()).unwrap()
+    }
+
+    #[test]
+    fn session_loads_ruleset() {
+        let s = mechanics_session();
+        assert!(s.ruleset().is_some());
+        assert_eq!(s.ruleset().unwrap().name, "mothership");
+    }
+
+    #[test]
+    fn session_loads_sheet() {
+        let s = mechanics_session();
+        assert!(s.sheet().is_some());
+        assert_eq!(s.sheet().unwrap().name, "Lamplighter");
+        assert_eq!(s.sheet().unwrap().attribute("Strength").unwrap(), 30);
+    }
+
+    #[test]
+    fn session_no_mechanics_still_works() {
+        let s = test_session();
+        assert!(s.ruleset().is_none());
+        assert!(s.sheet().is_none());
+    }
+
+    #[test]
+    fn check_with_ruleset() {
+        let mut s = mechanics_session();
+        let output = s.process("check strength").unwrap();
+        assert!(output.contains("Check Strength"));
+        assert!(output.contains("d100"));
+        assert_eq!(s.journal().len(), 1);
+    }
+
+    #[test]
+    fn check_without_ruleset() {
+        let mut s = test_session();
+        let result = s.process("check strength");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn check_unknown_attribute() {
+        let mut s = mechanics_session();
+        let result = s.process("check charisma");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn check_empty() {
+        let mut s = mechanics_session();
+        let result = s.process("check");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn roll_d100() {
+        let mut s = test_session();
+        let output = s.process("roll d100").unwrap();
+        assert!(output.contains("Roll 1d100"));
+        assert_eq!(s.journal().len(), 1);
+    }
+
+    #[test]
+    fn roll_2d6() {
+        let mut s = test_session();
+        let output = s.process("roll 2d6").unwrap();
+        assert!(output.contains("Roll 2d6"));
+    }
+
+    #[test]
+    fn roll_invalid() {
+        let mut s = test_session();
+        assert!(s.process("roll xyz").is_err());
+        assert!(s.process("roll").is_err());
+    }
+
+    #[test]
+    fn sheet_with_ruleset() {
+        let mut s = mechanics_session();
+        let output = s.process("sheet").unwrap();
+        assert!(output.contains("Character: Lamplighter"));
+        assert!(output.contains("System: mothership"));
+        assert!(output.contains("Strength: 30"));
+        assert!(output.contains("Health: 10/10"));
+    }
+
+    #[test]
+    fn sheet_without_ruleset() {
+        let mut s = test_session();
+        let result = s.process("sheet");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn status_with_mechanics() {
+        let s = mechanics_session();
+        let status = s.do_status().unwrap();
+        assert!(status.contains("System: mothership"));
+        assert!(status.contains("Character: Lamplighter"));
+    }
+
+    #[test]
+    fn help_mechanics_topic() {
+        let s = test_session();
+        let help = s.do_help("mechanics").unwrap();
+        assert!(help.contains("check"));
+        assert!(help.contains("roll"));
+        assert!(help.contains("sheet"));
+    }
+
+    #[test]
+    fn help_main_includes_mechanics() {
+        let s = test_session();
+        let help = s.do_help("").unwrap();
+        assert!(help.contains("check"));
+        assert!(help.contains("roll"));
+        assert!(help.contains("sheet"));
+    }
+
+    #[test]
+    fn parse_check_input_basic() {
+        let (attr, modifier) = parse_check_input("strength").unwrap();
+        assert_eq!(attr, "Strength");
+        assert_eq!(modifier, 0);
+    }
+
+    #[test]
+    fn parse_check_input_with_modifier() {
+        let (attr, modifier) = parse_check_input("combat -2").unwrap();
+        assert_eq!(attr, "Combat");
+        assert_eq!(modifier, -2);
+    }
+
+    #[test]
+    fn parse_dice_expression_d100() {
+        let (count, die) = parse_dice_expression("d100").unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(die, Die::D100);
+    }
+
+    #[test]
+    fn parse_dice_expression_2d6() {
+        let (count, die) = parse_dice_expression("2d6").unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(die, Die::D6);
+    }
+
+    #[test]
+    fn parse_dice_expression_invalid() {
+        assert!(parse_dice_expression("").is_err());
+        assert!(parse_dice_expression("xyz").is_err());
+        assert!(parse_dice_expression("0d6").is_err());
+    }
+
+    #[test]
+    fn journal_mechanics_check_export() {
+        let mut s = mechanics_session();
+        s.process("check strength").unwrap();
+        let md = s.process("export markdown").unwrap();
+        assert!(md.contains("**Check**"));
+        assert!(md.contains("Strength"));
+    }
+
+    #[test]
+    fn journal_dice_roll_export() {
+        let mut s = test_session();
+        s.process("roll 2d6").unwrap();
+        let md = s.process("export markdown").unwrap();
+        assert!(md.contains("**Roll**"));
+        assert!(md.contains("2d6"));
+    }
+
+    // --- World config integration tests ---
+
+    fn world_with_solo_config() -> World {
+        let mut world = World::new(WorldMeta::new("Configured World"));
+        let tavern = Entity::new(EntityKind::Location, "the Tavern");
+        world.add_entity(tavern).unwrap();
+        world.meta.properties.insert(
+            "solo.intro".to_string(),
+            MetadataValue::String("Welcome to the dungeon, adventurer.".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.oracle_prefix".to_string(),
+            MetadataValue::String("The spirits whisper...".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.help".to_string(),
+            MetadataValue::String("Use 'go' to move, 'ask' for the oracle.".to_string()),
+        );
+        world
+    }
+
+    #[test]
+    fn intro_custom_from_world() {
+        let world = world_with_solo_config();
+        let session = SoloSession::new(world, SoloConfig::default()).unwrap();
+        assert_eq!(session.intro(), "Welcome to the dungeon, adventurer.");
+    }
+
+    #[test]
+    fn intro_default_with_mechanics() {
+        let s = mechanics_session();
+        let intro = s.intro();
+        assert!(intro.contains("mothership"));
+        assert!(intro.contains("Lamplighter"));
+    }
+
+    #[test]
+    fn intro_default_no_mechanics() {
+        let s = test_session();
+        let intro = s.intro();
+        assert!(intro.contains("Solo TTRPG Session"));
+        assert!(intro.contains("Mythic GME"));
+    }
+
+    #[test]
+    fn oracle_with_prefix() {
+        let world = world_with_solo_config();
+        let mut s = SoloSession::new(world, SoloConfig::default()).unwrap();
+        let output = s.process("ask likely Is there a guard?").unwrap();
+        assert!(output.starts_with("The spirits whisper..."));
+        assert!(output.contains("d100:"));
+    }
+
+    #[test]
+    fn oracle_without_prefix() {
+        let mut s = test_session();
+        let output = s.process("ask likely Is there a guard?").unwrap();
+        assert!(output.starts_with("Oracle:"));
+    }
+
+    #[test]
+    fn help_custom_from_world() {
+        let world = world_with_solo_config();
+        let s = SoloSession::new(world, SoloConfig::default()).unwrap();
+        let help = s.do_help("").unwrap();
+        assert_eq!(help, "Use 'go' to move, 'ask' for the oracle.");
+    }
+
+    #[test]
+    fn help_topic_still_works_with_custom_help() {
+        let world = world_with_solo_config();
+        let s = SoloSession::new(world, SoloConfig::default()).unwrap();
+        let help = s.do_help("oracle").unwrap();
+        assert!(help.contains("Likelihood"));
+    }
+
+    #[test]
+    fn world_config_loaded() {
+        let world = world_with_solo_config();
+        let s = SoloSession::new(world, SoloConfig::default()).unwrap();
+        assert_eq!(
+            s.world_config().oracle_prefix.as_deref(),
+            Some("The spirits whisper..."),
+        );
     }
 }

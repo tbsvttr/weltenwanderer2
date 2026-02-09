@@ -35,4 +35,8 @@ pub enum SoloError {
     /// Fiction engine error.
     #[error("{0}")]
     Fiction(#[from] ww_fiction::FictionError),
+
+    /// Mechanics engine error.
+    #[error("mechanics: {0}")]
+    Mechanics(#[from] ww_mechanics::MechError),
 }

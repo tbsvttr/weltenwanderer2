@@ -54,13 +54,19 @@ impl PlayScreen {
 
         match FictionSession::new(world.clone()) {
             Ok(mut session) => {
+                // Welcome text
+                self.output_log = String::from(
+                    "**Interactive Fiction**\n\
+                     Explore the world, talk to characters,\n\
+                     pick up items. Type 'help' for commands.\n\n",
+                );
                 // Initial look
                 match session.process("look") {
                     Ok(output) => {
-                        self.output_log = output;
+                        self.output_log.push_str(&output);
                     }
                     Err(e) => {
-                        self.output_log = format!("Error: {e}");
+                        self.output_log.push_str(&format!("Error: {e}"));
                     }
                 }
                 self.session = Some(session);
@@ -78,8 +84,9 @@ impl Screen for PlayScreen {
             self.initialize(app);
         }
 
+        // ESC: scroll to top
         if is_key_pressed(KeyCode::Escape) {
-            return Transition::Pop;
+            self.scroll = 0;
         }
 
         // Mouse: tab click
@@ -178,7 +185,7 @@ impl Screen for PlayScreen {
         // Status
         draw_pixel_text(
             &app.font,
-            "Enter: send | PgUp/PgDn: scroll | Esc: back",
+            "Enter: send | Esc: top | help: commands",
             2.0,
             CANVAS_H - 2.0,
             palette::DARK_GRAY,

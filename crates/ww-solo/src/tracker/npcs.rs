@@ -67,11 +67,20 @@ impl NpcList {
 
     /// Create an NPC list pre-populated from world characters.
     ///
-    /// All characters except those with `CharacterStatus::Dead` are included.
+    /// All characters except those with `CharacterStatus::Dead` or those
+    /// that have `mechanics.*` properties (player characters) are included.
     /// Notes are generated from species and occupation when available.
     pub fn from_world(world: &World) -> Self {
         let mut list = Self::new();
         for entity in world.entities_by_kind(&EntityKind::Character) {
+            // Skip player characters (those with mechanics properties)
+            if entity
+                .properties
+                .keys()
+                .any(|k| k.starts_with("mechanics."))
+            {
+                continue;
+            }
             if let Some(ref char_comp) = entity.components.character {
                 if char_comp.status == CharacterStatus::Dead {
                     continue;
@@ -228,5 +237,28 @@ mod tests {
         let world = World::new(WorldMeta::new("Empty"));
         let nl = NpcList::from_world(&world);
         assert_eq!(nl.count(), 0);
+    }
+
+    #[test]
+    fn from_world_skips_player_character() {
+        let mut world = World::new(WorldMeta::new("Test"));
+
+        // NPC — should be included
+        let mut npc = Entity::new(EntityKind::Character, "Guard Captain");
+        npc.components.character = Some(ww_core::component::CharacterComponent::default());
+        world.add_entity(npc).unwrap();
+
+        // Player character with mechanics — should be excluded
+        let mut player = Entity::new(EntityKind::Character, "Hero");
+        player.components.character = Some(ww_core::component::CharacterComponent::default());
+        player.properties.insert(
+            "mechanics.strength".to_string(),
+            ww_core::entity::MetadataValue::Integer(10),
+        );
+        world.add_entity(player).unwrap();
+
+        let nl = NpcList::from_world(&world);
+        assert_eq!(nl.count(), 1);
+        assert_eq!(nl.list()[0].name, "Guard Captain");
     }
 }

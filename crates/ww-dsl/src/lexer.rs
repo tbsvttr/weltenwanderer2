@@ -161,7 +161,7 @@ pub fn lex(source: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<LexError>
                     }
                     RawToken::Str => {
                         let slice = lexer.slice();
-                        Token::Str(slice[1..slice.len() - 1].to_string())
+                        Token::Str(unescape(&slice[1..slice.len() - 1]))
                     }
                     RawToken::Float => {
                         let raw = lexer.slice().to_string();
@@ -203,6 +203,32 @@ pub fn lex(source: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<LexError>
     }
 
     (tokens, errors)
+}
+
+/// Process escape sequences in a string literal.
+///
+/// Supports `\\`, `\n`, `\t`, `\"`. Unknown sequences are kept as-is.
+fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -317,5 +343,43 @@ mod tests {
         let (tokens, _) = lex(source);
         assert_eq!(tokens[0].1, 0..5);
         assert_eq!(tokens[1].1, 6..11);
+    }
+
+    #[test]
+    fn unescape_newlines() {
+        assert_eq!(unescape(r"hello\nworld"), "hello\nworld");
+    }
+
+    #[test]
+    fn unescape_tabs() {
+        assert_eq!(unescape(r"col1\tcol2"), "col1\tcol2");
+    }
+
+    #[test]
+    fn unescape_backslash() {
+        assert_eq!(unescape(r"path\\file"), "path\\file");
+    }
+
+    #[test]
+    fn unescape_quote() {
+        assert_eq!(unescape(r#"say \"hello\""#), "say \"hello\"");
+    }
+
+    #[test]
+    fn unescape_unknown_kept() {
+        assert_eq!(unescape(r"\x"), "\\x");
+    }
+
+    #[test]
+    fn unescape_trailing_backslash() {
+        assert_eq!(unescape("trail\\"), "trail\\");
+    }
+
+    #[test]
+    fn lex_string_with_escapes() {
+        let source = r#""line1\nline2\ttab""#;
+        let (tokens, errors) = lex(source);
+        assert!(errors.is_empty());
+        assert!(matches!(&tokens[0].0, Token::Str(s) if s == "line1\nline2\ttab"));
     }
 }

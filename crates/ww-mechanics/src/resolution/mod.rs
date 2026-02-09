@@ -4,13 +4,16 @@
 //! - **Count successes** (2d20): count dice at or below a target number
 //! - **Highest die** (Trophy Gold): check the single highest die value
 //! - **Sum pool** (Blood & Honor): sum all dice and compare to a target
+//! - **Roll under** (Mothership): roll one die at or below a target value
 
 pub mod count;
 pub mod highest;
+pub mod roll_under;
 pub mod sum;
 
 pub use count::CountSuccesses;
 pub use highest::HighestDie;
+pub use roll_under::RollUnder;
 pub use sum::SumPool;
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +29,8 @@ pub enum ResolutionStrategy {
     Highest(HighestDie),
     /// Sum all dice and compare to a target number (Blood & Honor-style).
     Sum(SumPool),
+    /// Roll a single die and check if it's at or below a target (Mothership-style).
+    RollUnder(RollUnder),
 }
 
 /// The outcome of resolving a dice roll.
@@ -67,6 +72,7 @@ pub fn resolve(strategy: &ResolutionStrategy, roll: &RollResult) -> Outcome {
         ResolutionStrategy::Count(s) => s.resolve(roll),
         ResolutionStrategy::Highest(s) => s.resolve(roll),
         ResolutionStrategy::Sum(s) => s.resolve(roll),
+        ResolutionStrategy::RollUnder(s) => s.resolve(roll),
     }
 }
 
