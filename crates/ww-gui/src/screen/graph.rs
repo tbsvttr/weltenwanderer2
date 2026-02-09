@@ -246,13 +246,8 @@ impl Screen for GraphScreen {
         let (mx, my) = mouse_canvas_position();
 
         // Mouse: tab click
-        if is_mouse_button_pressed(MouseButton::Left) && my < 14.0 {
-            let tab_idx = (mx / (CANVAS_W / 3.0)) as usize;
-            match tab_idx {
-                0 => return Transition::Replace(ScreenId::Explorer),
-                2 => return Transition::Replace(ScreenId::Timeline),
-                _ => {}
-            }
+        if let Some(t) = super::handle_tab_click(mx, my, 1) {
+            return t;
         }
 
         // Zoom with mouse wheel
@@ -326,8 +321,7 @@ impl Screen for GraphScreen {
 
         // Tab bar
         let tab_area = Rect2::new(0.0, 0.0, CANVAS_W, 14.0);
-        let tabs = ["Entities", "Graph", "Timeline"];
-        crate::widget::tabs::draw_tabs(&app.font, &tabs, 1, &tab_area, mx, my);
+        crate::widget::tabs::draw_tabs(&app.font, super::TAB_LABELS, 1, &tab_area, mx, my);
 
         // Draw edges
         for edge in &self.edges {

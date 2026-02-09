@@ -548,7 +548,7 @@ fn classify_token(token: &Token, next: Option<&Token>) -> Option<u32> {
         Token::Word(w) if is_semantic_keyword(w) => Some(0), // KEYWORD
         Token::Word(_) if next.is_some_and(is_value_start) => Some(2), // PROPERTY
         Token::Str(_) => Some(3),                            // STRING
-        Token::Integer(_) | Token::Float(_) => Some(4),      // NUMBER
+        Token::Integer(_, _) | Token::Float(_, _) => Some(4), // NUMBER
         Token::DocString(_) => Some(5),                      // COMMENT
         Token::LBrace
         | Token::RBrace
@@ -605,7 +605,11 @@ fn is_semantic_keyword(word: &str) -> bool {
 fn is_value_start(token: &Token) -> bool {
     matches!(
         token,
-        Token::Str(_) | Token::Integer(_) | Token::Float(_) | Token::LBracket | Token::Word(_)
+        Token::Str(_)
+            | Token::Integer(_, _)
+            | Token::Float(_, _)
+            | Token::LBracket
+            | Token::Word(_)
     )
 }
 
@@ -1865,7 +1869,10 @@ mod tests {
 
     #[test]
     fn classify_number_token() {
-        assert_eq!(classify_token(&Token::Integer(42), None), Some(4));
+        assert_eq!(
+            classify_token(&Token::Integer(42, "42".to_string()), None),
+            Some(4),
+        );
     }
 
     #[test]

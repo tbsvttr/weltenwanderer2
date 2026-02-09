@@ -29,9 +29,11 @@ pub enum Token {
     /// Double-quoted string literal.
     Str(String),
     /// Integer literal (supports Rust-style underscores and negatives).
-    Integer(i64),
-    /// Floating-point literal.
-    Float(f64),
+    /// Stores both the parsed value and the original source text to preserve
+    /// leading zeros when numbers appear in entity names (e.g. `022`).
+    Integer(i64, String),
+    /// Floating-point literal. Stores parsed value and original source text.
+    Float(f64, String),
     /// Bare word (identifier or keyword, disambiguated by the parser).
     Word(String),
 }
@@ -49,8 +51,8 @@ impl fmt::Display for Token {
             Token::Newline => write!(f, "newline"),
             Token::DocString(_) => write!(f, "doc string"),
             Token::Str(s) => write!(f, "\"{s}\""),
-            Token::Integer(n) => write!(f, "{n}"),
-            Token::Float(n) => write!(f, "{n}"),
+            Token::Integer(_, s) => write!(f, "{s}"),
+            Token::Float(_, s) => write!(f, "{s}"),
             Token::Word(w) => write!(f, "{w}"),
         }
     }
@@ -161,26 +163,32 @@ pub fn lex(source: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<LexError>
                         let slice = lexer.slice();
                         Token::Str(slice[1..slice.len() - 1].to_string())
                     }
-                    RawToken::Float => match lexer.slice().replace('_', "").parse::<f64>() {
-                        Ok(n) => Token::Float(n),
-                        Err(_) => {
-                            errors.push(LexError {
-                                span: span.clone(),
-                                message: format!("invalid float literal: {}", lexer.slice()),
-                            });
-                            continue;
+                    RawToken::Float => {
+                        let raw = lexer.slice().to_string();
+                        match raw.replace('_', "").parse::<f64>() {
+                            Ok(n) => Token::Float(n, raw),
+                            Err(_) => {
+                                errors.push(LexError {
+                                    span: span.clone(),
+                                    message: format!("invalid float literal: {raw}"),
+                                });
+                                continue;
+                            }
                         }
-                    },
-                    RawToken::Integer => match lexer.slice().replace('_', "").parse::<i64>() {
-                        Ok(n) => Token::Integer(n),
-                        Err(_) => {
-                            errors.push(LexError {
-                                span: span.clone(),
-                                message: format!("invalid integer literal: {}", lexer.slice()),
-                            });
-                            continue;
+                    }
+                    RawToken::Integer => {
+                        let raw = lexer.slice().to_string();
+                        match raw.replace('_', "").parse::<i64>() {
+                            Ok(n) => Token::Integer(n, raw),
+                            Err(_) => {
+                                errors.push(LexError {
+                                    span: span.clone(),
+                                    message: format!("invalid integer literal: {raw}"),
+                                });
+                                continue;
+                            }
                         }
-                    },
+                    }
                     RawToken::Word => Token::Word(lexer.slice().to_string()),
                 };
                 tokens.push((token, span));
@@ -247,7 +255,7 @@ mod tests {
         let (tokens, errors) = lex("population 45_000");
         assert!(errors.is_empty());
 
-        assert!(matches!(&tokens[1].0, Token::Integer(45_000)));
+        assert!(matches!(&tokens[1].0, Token::Integer(45_000, _)));
     }
 
     #[test]
@@ -255,7 +263,7 @@ mod tests {
         let (tokens, errors) = lex("year -1247");
         assert!(errors.is_empty());
 
-        assert!(matches!(&tokens[1].0, Token::Integer(-1247)));
+        assert!(matches!(&tokens[1].0, Token::Integer(-1247, _)));
     }
 
     #[test]
@@ -300,7 +308,7 @@ mod tests {
         assert!(errors.is_empty());
         #[allow(clippy::approx_constant)]
         let expected = 3.14;
-        assert!(matches!(&tokens[0].0, Token::Float(f) if (*f - expected).abs() < f64::EPSILON));
+        assert!(matches!(&tokens[0].0, Token::Float(f, _) if (*f - expected).abs() < f64::EPSILON));
     }
 
     #[test]

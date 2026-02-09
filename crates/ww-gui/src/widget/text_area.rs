@@ -21,9 +21,10 @@ pub fn draw_text_area(font: &PixelFont, text: &str, scroll_offset: usize, area: 
     let wrapped = wrap_text(text, chars_per_line);
     let visible_lines = (area.h / LINE_HEIGHT) as usize;
 
-    for (vi, line_idx) in
-        (scroll_offset..wrapped.len().min(scroll_offset + visible_lines)).enumerate()
-    {
+    let end = wrapped
+        .len()
+        .min(scroll_offset.saturating_add(visible_lines));
+    for (vi, line_idx) in (scroll_offset..end).enumerate() {
         let y = area.y + vi as f32 * LINE_HEIGHT;
         let line = &wrapped[line_idx];
 

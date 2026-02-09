@@ -18,3 +18,6 @@ editors/vscode/out/
 
 # Claude
 .claude/
+
+# Copyrighted game material (not for distribution)
+thausand-empty-light/

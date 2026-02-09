@@ -55,8 +55,8 @@ where
     let kw = |k: &'static str| select! { Token::Word(ref w) if w.as_str() == k => () }.labelled(k);
     let word = select! { Token::Word(w) => w }.labelled("word");
     let string_lit = select! { Token::Str(s) => s }.labelled("string");
-    let integer = select! { Token::Integer(n) => n }.labelled("integer");
-    let float_lit = select! { Token::Float(n) => n }.labelled("float");
+    let integer = select! { Token::Integer(n, _) => n }.labelled("integer");
+    let float_lit = select! { Token::Float(n, _) => n }.labelled("float");
     let doc_string = select! { Token::DocString(s) => s }.labelled("doc string");
 
     // Zero or more newlines
@@ -64,10 +64,18 @@ where
     // One or more newlines
     let nl1 = just(Token::Newline).repeated().at_least(1).to(());
 
+    // -- Name token: words and numbers are both valid in entity names --
+    let name_token = choice((
+        select! { Token::Word(w) => w },
+        select! { Token::Integer(_, ref s) => s.clone() },
+        select! { Token::Float(_, ref s) => s.clone() },
+    ));
+
     // -- Entity name (in reference position) --
     let name_ref = choice((
         string_lit.map_with(|s, e| spanned(s, e.span())),
-        word.repeated()
+        name_token
+            .repeated()
             .at_least(1)
             .collect::<Vec<String>>()
             .map_with(|words, e| spanned(words.join(" "), e.span())),
@@ -77,7 +85,8 @@ where
     // -- Entity name in lists (same as name_ref) --
     let name_in_list = choice((
         string_lit.map_with(|s, e| spanned(s, e.span())),
-        word.repeated()
+        name_token
+            .repeated()
             .at_least(1)
             .collect::<Vec<String>>()
             .map_with(|words, e| spanned(words.join(" "), e.span())),
@@ -85,10 +94,14 @@ where
     .labelled("entity name");
 
     // -- Entity name in declaration (words before "is" or "(") --
-    let name_word = select! { Token::Word(ref w) if w.as_str() != "is" => w.clone() };
+    let decl_name_token = choice((
+        select! { Token::Word(ref w) if w.as_str() != "is" => w.clone() },
+        select! { Token::Integer(_, ref s) => s.clone() },
+        select! { Token::Float(_, ref s) => s.clone() },
+    ));
     let decl_name = choice((
         string_lit.map_with(|s, e| spanned(s, e.span())),
-        name_word
+        decl_name_token
             .repeated()
             .at_least(1)
             .collect::<Vec<String>>()
@@ -990,6 +1003,80 @@ the Citadel is a fortress {
                 }
             }
             _ => panic!("expected entity"),
+        }
+    }
+
+    // -- Numeric entity name tests --
+
+    #[test]
+    fn parse_numeric_name_in_declaration() {
+        let ast = parse_source("Section 1 is a location {\n    type corridor\n}").unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => {
+                assert_eq!(e.name.node, "Section 1");
+                assert_eq!(e.kind.node, "location");
+            }
+            _ => panic!("expected entity declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_numeric_name_multiple_numbers() {
+        let ast = parse_source("TEL 022 is a lore {\n    type facility\n}").unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => {
+                assert_eq!(e.name.node, "TEL 022");
+            }
+            _ => panic!("expected entity declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_numeric_name_in_relationship() {
+        let ast = parse_source("the Caisson is a location {\n    located at UPB 154\n}").unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => match &e.body[0].node {
+                Statement::Relationship(r) => {
+                    assert_eq!(r.targets[0].node, "UPB 154");
+                }
+                other => panic!("expected relationship, got {other:?}"),
+            },
+            _ => panic!("expected entity declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_numeric_name_in_list() {
+        let ast =
+            parse_source("the Flood is an event {\n    involving [Section 1, TEL 022]\n}").unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => match &e.body[0].node {
+                Statement::Relationship(r) => {
+                    assert_eq!(r.targets.len(), 2);
+                    assert_eq!(r.targets[0].node, "Section 1");
+                    assert_eq!(r.targets[1].node, "TEL 022");
+                }
+                other => panic!("expected relationship, got {other:?}"),
+            },
+            _ => panic!("expected entity declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_numeric_name_with_date_property() {
+        // Ensure negative numbers in date properties still work alongside numeric names
+        let ast = parse_source("TEL 022 Construction is an event {\n    date year -5\n}").unwrap();
+
+        match &ast.declarations[0].node {
+            Declaration::Entity(e) => {
+                assert_eq!(e.name.node, "TEL 022 Construction");
+                assert_eq!(e.body.len(), 1);
+            }
+            _ => panic!("expected entity declaration"),
         }
     }
 }

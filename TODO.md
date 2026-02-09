@@ -136,3 +136,22 @@
 - [x] Auto-populate NPC tracker from world characters (skip dead)
 - [x] DSL syntax for custom oracle tables (`oracle { actions [...] subjects [...] }`)
 - [ ] Save/load session state
+
+## M8: Pixel Art GUI
+
+- [x] `ww-gui` crate (macroquad, 480x270 virtual canvas, PICO-8 palette, 8x8 bitmap font)
+- [x] Title screen with directory input and world loading
+- [x] Explorer with entity list, detail panel, search
+- [x] Relationship graph (force-directed layout, zoom/pan, hover tooltips, node click)
+- [x] Chronological timeline view
+- [x] Interactive fiction play and solo TTRPG session screens
+- [x] Character sheet viewer and dice roller
+- [x] Mouse click support throughout (tabs, list, graph nodes, buttons)
+- [x] Key repeat and mouse scroll wheel for all scrollable panels
+- [ ] Sprite animation and visual polish
+- [ ] Save/load session state for fiction and solo screens
+- [ ] In-app entity editing
+
+## Real-World Scenarios
+
+- [ ] Run "A Thousand Empty Light" for a friend via screen sharing with Weltenwanderer

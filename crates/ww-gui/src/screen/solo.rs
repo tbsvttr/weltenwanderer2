@@ -8,7 +8,7 @@ use ww_solo::config::SoloConfig;
 use crate::app::AppState;
 use crate::theme::font::draw_pixel_text;
 use crate::theme::palette;
-use crate::theme::{CANVAS_H, CANVAS_W};
+use crate::theme::{CANVAS_H, CANVAS_W, mouse_canvas_position};
 use crate::widget::Rect2;
 use crate::widget::panel::{draw_panel, draw_panel_titled};
 use crate::widget::text_area;
@@ -83,6 +83,12 @@ impl Screen for SoloScreen {
             return Transition::Pop;
         }
 
+        // Mouse: tab click
+        let (mx, my) = mouse_canvas_position();
+        if let Some(t) = super::handle_tab_click(mx, my, 4) {
+            return t;
+        }
+
         // Text input
         for ch in crate::input::typed_chars() {
             self.input_text.push(ch);
@@ -130,13 +136,19 @@ impl Screen for SoloScreen {
     }
 
     fn draw(&self, app: &AppState) {
-        let full = Rect2::new(0.0, 0.0, CANVAS_W, CANVAS_H - 20.0);
+        let (mx, my) = mouse_canvas_position();
+
+        // Tab bar
+        let tab_area = Rect2::new(0.0, 0.0, CANVAS_W, 14.0);
+        crate::widget::tabs::draw_tabs(&app.font, super::TAB_LABELS, 4, &tab_area, mx, my);
+
+        let full = Rect2::new(0.0, 16.0, CANVAS_W, CANVAS_H - 36.0);
         let (main_area, sidebar_area) = full.split_h(0.7);
 
         // Main output panel
         let output_panel = Rect2::new(
             main_area.x + 2.0,
-            2.0,
+            main_area.y + 2.0,
             main_area.w - 4.0,
             main_area.h - 20.0,
         );
@@ -162,7 +174,7 @@ impl Screen for SoloScreen {
         // Input
         let input_area = Rect2::new(
             main_area.x + 2.0,
-            main_area.h - 16.0,
+            main_area.y + main_area.h - 16.0,
             main_area.w - 4.0,
             14.0,
         );
@@ -177,7 +189,7 @@ impl Screen for SoloScreen {
         // Sidebar: status panel
         let sidebar = Rect2::new(
             sidebar_area.x + 2.0,
-            2.0,
+            sidebar_area.y + 2.0,
             sidebar_area.w - 4.0,
             sidebar_area.h,
         );

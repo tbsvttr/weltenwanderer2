@@ -55,13 +55,8 @@ impl Screen for TimelineScreen {
 
         // Mouse: tab click
         let (mx, my) = crate::theme::mouse_canvas_position();
-        if is_mouse_button_pressed(MouseButton::Left) && my < 14.0 {
-            let tab_idx = (mx / (CANVAS_W / 3.0)) as usize;
-            match tab_idx {
-                0 => return Transition::Replace(ScreenId::Explorer),
-                1 => return Transition::Replace(ScreenId::Graph),
-                _ => {}
-            }
+        if let Some(t) = super::handle_tab_click(mx, my, 2) {
+            return t;
         }
 
         let count = app
@@ -93,8 +88,7 @@ impl Screen for TimelineScreen {
 
         // Tab bar
         let tab_area = Rect2::new(0.0, 0.0, CANVAS_W, 14.0);
-        let tabs = ["Entities", "Graph", "Timeline"];
-        crate::widget::tabs::draw_tabs(&app.font, &tabs, 2, &tab_area, mx, my);
+        crate::widget::tabs::draw_tabs(&app.font, super::TAB_LABELS, 2, &tab_area, mx, my);
 
         let panel = Rect2::new(4.0, 18.0, CANVAS_W - 8.0, CANVAS_H - 34.0);
         draw_panel_titled(&panel, "Timeline", &app.font);

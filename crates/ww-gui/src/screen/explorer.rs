@@ -76,13 +76,8 @@ impl Screen for ExplorerScreen {
 
         // Mouse: tab click
         let (mx, my) = crate::theme::mouse_canvas_position();
-        if is_mouse_button_pressed(MouseButton::Left) && my < 14.0 {
-            let tab_idx = (mx / (CANVAS_W / 3.0)) as usize;
-            match tab_idx {
-                1 => return Transition::Replace(ScreenId::Graph),
-                2 => return Transition::Replace(ScreenId::Timeline),
-                _ => {}
-            }
+        if let Some(t) = super::handle_tab_click(mx, my, 0) {
+            return t;
         }
 
         // Search toggle
@@ -188,8 +183,7 @@ impl Screen for ExplorerScreen {
 
         // Tab bar
         let tab_area = Rect2::new(0.0, 0.0, CANVAS_W, 14.0);
-        let tabs = ["Entities", "Graph", "Timeline"];
-        crate::widget::tabs::draw_tabs(&app.font, &tabs, 0, &tab_area, mx, my);
+        crate::widget::tabs::draw_tabs(&app.font, super::TAB_LABELS, 0, &tab_area, mx, my);
 
         // Content area: 2px gap below tab bar, 12px reserved for status bar
         let full = Rect2::new(0.0, 16.0, CANVAS_W, CANVAS_H - 28.0);

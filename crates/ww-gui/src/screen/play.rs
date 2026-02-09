@@ -7,7 +7,7 @@ use ww_fiction::FictionSession;
 use crate::app::AppState;
 use crate::theme::font::draw_pixel_text;
 use crate::theme::palette;
-use crate::theme::{CANVAS_H, CANVAS_W};
+use crate::theme::{CANVAS_H, CANVAS_W, mouse_canvas_position};
 use crate::widget::Rect2;
 use crate::widget::panel::draw_panel;
 use crate::widget::text_area;
@@ -82,6 +82,12 @@ impl Screen for PlayScreen {
             return Transition::Pop;
         }
 
+        // Mouse: tab click
+        let (mx, my) = mouse_canvas_position();
+        if let Some(t) = super::handle_tab_click(mx, my, 3) {
+            return t;
+        }
+
         // Text input
         for ch in crate::input::typed_chars() {
             self.input_text.push(ch);
@@ -131,8 +137,14 @@ impl Screen for PlayScreen {
     }
 
     fn draw(&self, app: &AppState) {
-        // Output panel
-        let output_area = Rect2::new(4.0, 4.0, CANVAS_W - 8.0, CANVAS_H - 26.0);
+        let (mx, my) = mouse_canvas_position();
+
+        // Tab bar
+        let tab_area = Rect2::new(0.0, 0.0, CANVAS_W, 14.0);
+        crate::widget::tabs::draw_tabs(&app.font, super::TAB_LABELS, 3, &tab_area, mx, my);
+
+        // Output panel (below tab bar)
+        let output_area = Rect2::new(4.0, 18.0, CANVAS_W - 8.0, CANVAS_H - 40.0);
         draw_panel(&output_area);
         let output_inner = output_area.inset(3.0);
 
