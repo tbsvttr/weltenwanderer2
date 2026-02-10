@@ -9,7 +9,6 @@ pub mod solo;
 pub mod timeline;
 
 use ratatui::prelude::*;
-use ratatui::widgets::Tabs;
 
 /// Identifies which tab is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +106,7 @@ pub trait Tab {
 
 /// Draw the tab bar.
 pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
-    let titles: Vec<&str> = vec![
+    let titles = [
         "[1]Explorer",
         "[2]Graph",
         "[3]Timeline",
@@ -117,11 +116,26 @@ pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
         "[7]Dice",
     ];
 
-    let tabs = Tabs::new(titles)
-        .select(active.index())
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::White).bold())
-        .divider(" | ");
+    // Create spans with proper styling for each tab
+    let active_idx = active.index();
+    let mut spans = Vec::new();
 
-    frame.render_widget(tabs, area);
+    for (i, title) in titles.iter().enumerate() {
+        // Add divider before this tab (except for first)
+        if i > 0 {
+            spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
+        }
+
+        // Add the tab title with appropriate styling
+        let style = if i == active_idx {
+            Style::default().fg(Color::White).bold()
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(*title, style));
+    }
+
+    let line = Line::from(spans);
+    let paragraph = ratatui::widgets::Paragraph::new(line);
+    frame.render_widget(paragraph, area);
 }
