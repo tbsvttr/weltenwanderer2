@@ -123,20 +123,35 @@ pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
     for (i, title) in titles.iter().enumerate() {
         // Add divider before this tab (except for first)
         if i > 0 {
-            spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled(
+                " | ",
+                Style::default().fg(Color::DarkGray).bg(Color::Black),
+            ));
         }
 
         // Add the tab title with appropriate styling
         let style = if i == active_idx {
-            Style::default().fg(Color::White).bold()
+            Style::default().fg(Color::White).bg(Color::Black).bold()
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::DarkGray).bg(Color::Black)
         };
         spans.push(Span::styled(*title, style));
     }
 
+    // Calculate the total length of the tab bar text
+    let text_len: usize = spans.iter().map(|s| s.content.len()).sum();
+
+    // Pad with spaces to fill the entire width and prevent text bleed-through
+    let padding_len = (area.width as usize).saturating_sub(text_len);
+    if padding_len > 0 {
+        spans.push(Span::styled(
+            " ".repeat(padding_len),
+            Style::default().bg(Color::Black),
+        ));
+    }
+
     let line = Line::from(spans);
-    let paragraph = ratatui::widgets::Paragraph::new(line).style(Style::default().bg(Color::Black)); // Clear background
+    let paragraph = ratatui::widgets::Paragraph::new(line);
     frame.render_widget(paragraph, area);
 }
 
