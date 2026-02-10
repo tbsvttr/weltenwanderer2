@@ -136,6 +136,6 @@ pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
     }
 
     let line = Line::from(spans);
-    let paragraph = ratatui::widgets::Paragraph::new(line);
+    let paragraph = ratatui::widgets::Paragraph::new(line).style(Style::default().bg(Color::Black)); // Clear background
     frame.render_widget(paragraph, area);
 }
