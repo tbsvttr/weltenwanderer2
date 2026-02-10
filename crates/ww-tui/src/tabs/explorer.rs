@@ -219,10 +219,9 @@ impl Tab for ExplorerTab {
             MouseEventKind::Down(MouseButton::Left) => {
                 // Handle clicks in list view to select entities
                 if self.sub_view == SubView::List {
-                    // Row 0 is tab bar, row 1+ is content
-                    // Account for block border (1 row at top) and title
-                    if mouse.row >= 3 {
-                        let clicked_row = mouse.row - 3;
+                    // Row 0 is tab bar, row 1 is block border with title, row 2+ is list content
+                    if mouse.row >= 2 {
+                        let clicked_row = mouse.row - 2;
                         let target_idx = clicked_row as usize;
                         if target_idx < self.filtered_ids.len() {
                             if target_idx == self.list_cursor {
@@ -669,7 +668,7 @@ mod tests {
         let mut tab = ExplorerTab::new(world);
         tab.list_cursor = 0;
 
-        // Click on row 5 (row offset: 5 - 3 = 2, so index 2)
+        // Click on row 5 (row offset: 5 - 2 = 3, so index 3)
         let mouse = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
@@ -679,8 +678,8 @@ mod tests {
 
         tab.handle_mouse(mouse);
         assert_eq!(
-            tab.list_cursor, 2,
-            "Click on row 5 should select entity at index 2 (row - 3)"
+            tab.list_cursor, 3,
+            "Click on row 5 should select entity at index 3 (row - 2)"
         );
         assert_eq!(
             tab.sub_view,
@@ -695,11 +694,11 @@ mod tests {
         let mut tab = ExplorerTab::new(world);
         tab.list_cursor = 1;
 
-        // Click on row 4 (row offset: 4 - 3 = 1, same as cursor)
+        // Click on row 3 (row offset: 3 - 2 = 1, same as cursor)
         let mouse = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
-            row: 4,
+            row: 3,
             modifiers: crossterm::event::KeyModifiers::empty(),
         };
 
@@ -724,11 +723,11 @@ mod tests {
 
         assert_eq!(tab.view_stack.len(), 0, "View stack should start empty");
 
-        // Click on row 5 (row offset: 5 - 3 = 2, same as cursor)
+        // Click on row 4 (row offset: 4 - 2 = 2, same as cursor)
         let mouse = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
-            row: 5,
+            row: 4,
             modifiers: crossterm::event::KeyModifiers::empty(),
         };
 
@@ -806,38 +805,10 @@ mod tests {
         let world = create_test_world();
         let mut tab = ExplorerTab::new(world);
 
-        // Test row offset calculation: row - 3
-        // Start with cursor at 0, click row 4 (index 1) to avoid double-click
-        let mouse = MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 4,
-            modifiers: crossterm::event::KeyModifiers::empty(),
-        };
-        tab.handle_mouse(mouse);
-        assert_eq!(tab.list_cursor, 1, "Row 4 should map to index 1 (row - 3)");
+        // Test row offset calculation: row - 2
+        // Row 2 is first entity (index 0), row 3 is second (index 1), etc.
 
-        // Click row 5 -> index 2
-        let mouse = MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 5,
-            modifiers: crossterm::event::KeyModifiers::empty(),
-        };
-        tab.handle_mouse(mouse);
-        assert_eq!(tab.list_cursor, 2, "Row 5 should map to index 2 (row - 3)");
-
-        // Click row 7 -> index 4
-        let mouse = MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 7,
-            modifiers: crossterm::event::KeyModifiers::empty(),
-        };
-        tab.handle_mouse(mouse);
-        assert_eq!(tab.list_cursor, 4, "Row 7 should map to index 4 (row - 3)");
-
-        // Click row 3 -> index 0
+        // Click row 3 -> index 1
         let mouse = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
@@ -845,11 +816,41 @@ mod tests {
             modifiers: crossterm::event::KeyModifiers::empty(),
         };
         tab.handle_mouse(mouse);
-        assert_eq!(tab.list_cursor, 0, "Row 3 should map to index 0 (row - 3)");
+        assert_eq!(tab.list_cursor, 1, "Row 3 should map to index 1 (row - 2)");
+
+        // Click row 4 -> index 2
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 4,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 2, "Row 4 should map to index 2 (row - 2)");
+
+        // Click row 6 -> index 4
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 6,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 4, "Row 6 should map to index 4 (row - 2)");
+
+        // Click row 2 -> index 0
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 2,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 0, "Row 2 should map to index 0 (row - 2)");
     }
 
     #[test]
-    fn mouse_click_above_row_3_is_ignored() {
+    fn mouse_click_above_row_2_is_ignored() {
         let world = create_test_world();
         let mut tab = ExplorerTab::new(world);
         tab.list_cursor = 2;
@@ -867,17 +868,17 @@ mod tests {
             "Click on row 0 should be ignored, cursor unchanged"
         );
 
-        // Click on row 2 (border) - should be ignored
+        // Click on row 1 (border/title) - should be ignored
         let mouse = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
-            row: 2,
+            row: 1,
             modifiers: crossterm::event::KeyModifiers::empty(),
         };
         tab.handle_mouse(mouse);
         assert_eq!(
             tab.list_cursor, 2,
-            "Click on row 2 should be ignored, cursor unchanged"
+            "Click on row 1 should be ignored, cursor unchanged"
         );
     }
 
