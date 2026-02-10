@@ -58,10 +58,11 @@ impl SoloConfig {
 ///         chaos_label "Pressure"
 ///         event_prefix "The tunnel shifts:"
 ///         reaction_prefix "Response"
+///         enable_chaos true
 ///     }
 /// }
 /// ```
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SoloWorldConfig {
     /// Custom intro/welcome text shown when the session starts.
     pub intro: Option<String>,
@@ -85,6 +86,27 @@ pub struct SoloWorldConfig {
     pub event_prefix: Option<String>,
     /// Prefix for NPC reaction output.
     pub reaction_prefix: Option<String>,
+    /// Enable Mythic-style chaos/scene management (default: true).
+    pub enable_chaos: bool,
+}
+
+impl Default for SoloWorldConfig {
+    fn default() -> Self {
+        Self {
+            intro: None,
+            oracle_prefix: None,
+            help: None,
+            scene_header: None,
+            scene_normal: None,
+            scene_altered: None,
+            scene_interrupted: None,
+            scene_end: None,
+            chaos_label: None,
+            event_prefix: None,
+            reaction_prefix: None,
+            enable_chaos: true, // Default to enabled for backwards compatibility
+        }
+    }
 }
 
 impl SoloWorldConfig {
@@ -105,6 +127,7 @@ impl SoloWorldConfig {
             chaos_label: extract_string(properties, "solo.chaos_label"),
             event_prefix: extract_string(properties, "solo.event_prefix"),
             reaction_prefix: extract_string(properties, "solo.reaction_prefix"),
+            enable_chaos: extract_bool(properties, "solo.enable_chaos").unwrap_or(true),
         }
     }
 }
@@ -113,6 +136,14 @@ impl SoloWorldConfig {
 fn extract_string(properties: &HashMap<String, MetadataValue>, key: &str) -> Option<String> {
     match properties.get(key) {
         Some(MetadataValue::String(s)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+/// Extract an optional boolean value from a properties map.
+fn extract_bool(properties: &HashMap<String, MetadataValue>, key: &str) -> Option<bool> {
+    match properties.get(key) {
+        Some(MetadataValue::Boolean(b)) => Some(*b),
         _ => None,
     }
 }
@@ -150,6 +181,7 @@ mod tests {
         assert!(cfg.intro.is_none());
         assert!(cfg.oracle_prefix.is_none());
         assert!(cfg.help.is_none());
+        assert!(cfg.enable_chaos, "chaos should be enabled by default");
     }
 
     #[test]
@@ -240,5 +272,30 @@ mod tests {
         assert!(cfg.chaos_label.is_none());
         assert!(cfg.event_prefix.is_none());
         assert!(cfg.reaction_prefix.is_none());
+    }
+
+    #[test]
+    fn solo_world_config_chaos_can_be_disabled() {
+        let mut props = HashMap::new();
+        props.insert(
+            "solo.enable_chaos".to_string(),
+            MetadataValue::Boolean(false),
+        );
+        let cfg = SoloWorldConfig::from_world_meta(&props);
+        assert!(
+            !cfg.enable_chaos,
+            "chaos should be disabled when set to false"
+        );
+    }
+
+    #[test]
+    fn solo_world_config_chaos_enabled_explicitly() {
+        let mut props = HashMap::new();
+        props.insert(
+            "solo.enable_chaos".to_string(),
+            MetadataValue::Boolean(true),
+        );
+        let cfg = SoloWorldConfig::from_world_meta(&props);
+        assert!(cfg.enable_chaos, "chaos should be enabled when set to true");
     }
 }

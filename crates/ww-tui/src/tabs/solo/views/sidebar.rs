@@ -24,18 +24,33 @@ pub fn draw(frame: &mut Frame, tab: &SoloTab, area: Rect) {
         .map(|s| s.tracks.len() as u16)
         .unwrap_or(0);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),                  // Chaos + Scene
-            Constraint::Length(track_count.max(1)), // Tracks
-            Constraint::Min(2),                     // Threads + NPCs
-        ])
-        .split(inner);
+    // Only show chaos/scene section if chaos is enabled
+    if tab.session.world_config().enable_chaos {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2),                  // Chaos + Scene
+                Constraint::Length(track_count.max(1)), // Tracks
+                Constraint::Min(2),                     // Threads + NPCs
+            ])
+            .split(inner);
 
-    draw_info(frame, tab, chunks[0]);
-    draw_tracks(frame, tab, chunks[1]);
-    draw_lists(frame, tab, chunks[2]);
+        draw_info(frame, tab, chunks[0]);
+        draw_tracks(frame, tab, chunks[1]);
+        draw_lists(frame, tab, chunks[2]);
+    } else {
+        // Chaos disabled: skip chaos/scene section
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(track_count.max(1)), // Tracks
+                Constraint::Min(2),                     // Threads + NPCs
+            ])
+            .split(inner);
+
+        draw_tracks(frame, tab, chunks[0]);
+        draw_lists(frame, tab, chunks[1]);
+    }
 }
 
 /// Chaos factor and scene info.

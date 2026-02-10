@@ -390,8 +390,21 @@ impl SoloSession {
             "ask" => self.do_oracle(rest),
             "reaction" => self.do_reaction(rest),
             "event" => self.do_event(),
-            "scene" => self.do_scene_start(rest),
+            "scene" => {
+                if !self.world_config.enable_chaos {
+                    return Err(SoloError::InvalidChoice(
+                        "Scene management is disabled in this world. Use 'ask' for oracle queries."
+                            .to_string(),
+                    ));
+                }
+                self.do_scene_start(rest)
+            }
             "end" if lower.starts_with("end scene") => {
+                if !self.world_config.enable_chaos {
+                    return Err(SoloError::InvalidChoice(
+                        "Scene management is disabled in this world.".to_string(),
+                    ));
+                }
                 let after = trimmed
                     .get("end scene".len()..)
                     .map(|s| s.trim())
@@ -976,16 +989,21 @@ impl SoloSession {
     }
 
     fn do_status(&self) -> SoloResult<String> {
-        let chaos_label = self
-            .world_config
-            .chaos_label
-            .as_deref()
-            .unwrap_or("Chaos Factor");
-        let mut out = format!("{chaos_label}: {}/9\n", self.chaos.value());
+        let mut out = String::new();
 
-        match &self.current_scene {
-            Some(scene) => out.push_str(&format!("Current Scene: #{}\n", scene.number)),
-            None => out.push_str("No active scene.\n"),
+        // Only show chaos and scene info if chaos system is enabled
+        if self.world_config.enable_chaos {
+            let chaos_label = self
+                .world_config
+                .chaos_label
+                .as_deref()
+                .unwrap_or("Chaos Factor");
+            out.push_str(&format!("{chaos_label}: {}/9\n", self.chaos.value()));
+
+            match &self.current_scene {
+                Some(scene) => out.push_str(&format!("Current Scene: #{}\n", scene.number)),
+                None => out.push_str("No active scene.\n"),
+            }
         }
 
         out.push_str(&format!(
@@ -1016,12 +1034,19 @@ Oracle Commands:
 Likelihood: impossible, no way, very unlikely, unlikely, 50/50,
   somewhat likely, likely, very likely, near sure, sure thing, certain"
                 .to_string()),
-            "scene" | "scenes" => Ok("\
+            "scene" | "scenes" => {
+                if !self.world_config.enable_chaos {
+                    return Err(SoloError::InvalidChoice(
+                        "Scene management is disabled in this world.".to_string(),
+                    ));
+                }
+                Ok("\
 Scene Commands:
   scene <setup>                 Start a new scene (chaos check)
   end scene well <summary>      End scene, chaos decreases
   end scene badly <summary>     End scene, chaos increases"
-                .to_string()),
+                    .to_string())
+            }
             "thread" | "threads" => Ok("\
 Thread Commands:
   thread add <name>             Add a plot thread
@@ -1052,14 +1077,24 @@ Mechanics Commands:
             _ if self.world_config.help.is_some() => {
                 Ok(self.world_config.help.as_ref().unwrap().clone())
             }
-            _ => Ok("\
+            _ => {
+                let scene_help = if self.world_config.enable_chaos {
+                    "  scene <setup>                 Start a new scene\n  end scene [well|badly] <text> End current scene\n"
+                } else {
+                    ""
+                };
+                let help_topics = if self.world_config.enable_chaos {
+                    "  help [topic]                  Show help (oracle, scene, mechanics, ...)"
+                } else {
+                    "  help [topic]                  Show help (oracle, mechanics, ...)"
+                };
+                Ok(format!(
+                    "\
 Solo TTRPG Commands:
   ask [likelihood] <question>   Consult the oracle
   reaction <npc>                Roll NPC reaction
   event                         Force a random event
-  scene <setup>                 Start a new scene
-  end scene [well|badly] <text> End current scene
-  check <attribute> [modifier]  Roll a mechanics check
+{scene_help}  check <attribute> [modifier]  Roll a mechanics check
   roll <dice>                   Roll dice (d100, 2d6, d20)
   panic                         PANIC check (d20 vs Stress)
   encounter <creature>          Show creature stats
@@ -1072,12 +1107,13 @@ Solo TTRPG Commands:
   journal                       Show journal
   export [markdown|text]        Export journal
   status                        Show session status
-  help [topic]                  Show help (oracle, scene, mechanics, ...)
+{help_topics}
   quit                          Exit
 
 World interaction (forwarded to fiction engine):
   look, go, move, take, drop, talk, use, inventory"
-                .to_string()),
+                ))
+            }
         }
     }
 }

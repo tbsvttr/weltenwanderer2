@@ -8,7 +8,7 @@ use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 
-use super::tables::OracleConfig;
+use super::tables::{OracleConfig, OracleMode};
 
 /// What a random event is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,15 +60,21 @@ impl std::fmt::Display for EventFocus {
 pub struct RandomEvent {
     /// What the event is about.
     pub focus: EventFocus,
-    /// Action descriptor (verb/concept).
+    /// Action descriptor (verb/concept) - ActionSubject mode only.
     pub action: String,
-    /// Subject descriptor (noun/concept).
+    /// Subject descriptor (noun/concept) - ActionSubject mode only.
     pub subject: String,
+    /// Symbol descriptor - Symbols mode only.
+    pub symbol: Option<String>,
 }
 
 impl std::fmt::Display for RandomEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {} + {}", self.focus, self.action, self.subject)
+        if let Some(sym) = &self.symbol {
+            write!(f, "{}: {}", self.focus, sym)
+        } else {
+            write!(f, "{}: {} + {}", self.focus, self.action, self.subject)
+        }
     }
 }
 
@@ -94,12 +100,26 @@ pub fn roll_event_focus(rng: &mut StdRng) -> EventFocus {
 /// Generate a complete random event using the given oracle configuration.
 pub fn generate_random_event(rng: &mut StdRng, config: &OracleConfig) -> RandomEvent {
     let focus = roll_event_focus(rng);
-    let action = config.random_action(rng).to_string();
-    let subject = config.random_subject(rng).to_string();
-    RandomEvent {
-        focus,
-        action,
-        subject,
+    match config.mode {
+        OracleMode::ActionSubject => {
+            let action = config.random_action(rng).to_string();
+            let subject = config.random_subject(rng).to_string();
+            RandomEvent {
+                focus,
+                action,
+                subject,
+                symbol: None,
+            }
+        }
+        OracleMode::Symbols => {
+            let symbol = config.random_symbol(rng).to_string();
+            RandomEvent {
+                focus,
+                action: String::new(),
+                subject: String::new(),
+                symbol: Some(symbol),
+            }
+        }
     }
 }
 
@@ -131,13 +151,25 @@ mod tests {
     }
 
     #[test]
-    fn event_display() {
+    fn event_display_action_subject() {
         let event = RandomEvent {
             focus: EventFocus::NpcAction,
             action: "Betray".to_string(),
             subject: "Allies".to_string(),
+            symbol: None,
         };
         assert_eq!(event.to_string(), "NPC Action: Betray + Allies");
+    }
+
+    #[test]
+    fn event_display_symbol() {
+        let event = RandomEvent {
+            focus: EventFocus::PcPositive,
+            action: String::new(),
+            subject: String::new(),
+            symbol: Some("Anchor".to_string()),
+        };
+        assert_eq!(event.to_string(), "PC Positive: Anchor");
     }
 
     #[test]
@@ -153,11 +185,13 @@ mod tests {
             focus: EventFocus::IntroduceNpc,
             action: "Create".to_string(),
             subject: "Enemies".to_string(),
+            symbol: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         let event2: RandomEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(event2.focus, EventFocus::IntroduceNpc);
         assert_eq!(event2.action, "Create");
         assert_eq!(event2.subject, "Enemies");
+        assert!(event2.symbol.is_none());
     }
 }

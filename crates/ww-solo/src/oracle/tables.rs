@@ -227,6 +227,15 @@ pub fn random_subject(rng: &mut StdRng) -> &'static str {
     SUBJECT_WORDS[rng.random_range(0..SUBJECT_WORDS.len())]
 }
 
+/// Oracle mode: action/subject tables (Mythic-style) or symbol list (Semiotic Standard).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OracleMode {
+    /// Action + Subject word pairs (Mythic GME style).
+    ActionSubject,
+    /// Single symbol list (Semiotic Standard style, e.g. TEL).
+    Symbols,
+}
+
 /// Oracle configuration loaded from world data or defaults.
 ///
 /// Custom action/subject word lists can be defined in `.ww` files using an
@@ -240,18 +249,34 @@ pub fn random_subject(rng: &mut StdRng) -> &'static str {
 ///     }
 /// }
 /// ```
+///
+/// Or a single symbol list (Semiotic Standard):
+///
+/// ```text
+/// lore "Oracle Tables" {
+///     oracle {
+///         symbols ["Anchor", "Atom", "Bird", ...]
+///     }
+/// }
+/// ```
 pub struct OracleConfig {
-    /// Action/verb words for random event generation.
+    /// Oracle mode: action/subject or symbols.
+    pub mode: OracleMode,
+    /// Action/verb words for random event generation (Mythic mode).
     pub actions: Vec<String>,
-    /// Subject/noun words for random event generation.
+    /// Subject/noun words for random event generation (Mythic mode).
     pub subjects: Vec<String>,
+    /// Symbol words for prompts (Semiotic Standard mode).
+    pub symbols: Vec<String>,
 }
 
 impl Default for OracleConfig {
     fn default() -> Self {
         Self {
+            mode: OracleMode::ActionSubject,
             actions: ACTION_WORDS.iter().map(|s| (*s).to_string()).collect(),
             subjects: SUBJECT_WORDS.iter().map(|s| (*s).to_string()).collect(),
+            symbols: Vec::new(),
         }
     }
 }
@@ -259,12 +284,17 @@ impl Default for OracleConfig {
 impl OracleConfig {
     /// Load oracle configuration from a compiled world.
     ///
-    /// Scans all entities for `oracle.actions` and `oracle.subjects` properties
-    /// (set via `oracle { actions [...] subjects [...] }` blocks in `.ww` files).
+    /// Scans all entities for `oracle.actions`, `oracle.subjects`, or `oracle.symbols`
+    /// properties (set via `oracle { ... }` blocks in `.ww` files).
+    ///
+    /// If `oracle.symbols` is found, uses Semiotic Standard mode (single symbol list).
+    /// Otherwise, uses action/subject mode (Mythic GME style).
+    ///
     /// Falls back to built-in defaults if not found or if custom lists are empty.
     pub fn from_world(world: &World) -> Self {
         let mut custom_actions: Option<Vec<String>> = None;
         let mut custom_subjects: Option<Vec<String>> = None;
+        let mut custom_symbols: Option<Vec<String>> = None;
 
         for entity in world.all_entities() {
             if let Some(MetadataValue::List(items)) = entity.properties.get("oracle.actions") {
@@ -291,23 +321,66 @@ impl OracleConfig {
                     custom_subjects = Some(strings);
                 }
             }
+            if let Some(MetadataValue::List(items)) = entity.properties.get("oracle.symbols") {
+                let strings: Vec<String> = items
+                    .iter()
+                    .filter_map(|v| match v {
+                        MetadataValue::String(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                if !strings.is_empty() {
+                    custom_symbols = Some(strings);
+                }
+            }
         }
 
         let defaults = Self::default();
-        Self {
-            actions: custom_actions.unwrap_or(defaults.actions),
-            subjects: custom_subjects.unwrap_or(defaults.subjects),
+
+        // If symbols are provided, use Semiotic Standard mode
+        if let Some(symbols) = custom_symbols {
+            Self {
+                mode: OracleMode::Symbols,
+                actions: Vec::new(),
+                subjects: Vec::new(),
+                symbols,
+            }
+        } else {
+            // Otherwise use action/subject mode
+            Self {
+                mode: OracleMode::ActionSubject,
+                actions: custom_actions.unwrap_or(defaults.actions),
+                subjects: custom_subjects.unwrap_or(defaults.subjects),
+                symbols: Vec::new(),
+            }
         }
     }
 
-    /// Pick a random action word from this config.
+    /// Pick a random action word from this config (ActionSubject mode).
     pub fn random_action<'a>(&'a self, rng: &mut StdRng) -> &'a str {
-        &self.actions[rng.random_range(0..self.actions.len())]
+        if self.actions.is_empty() {
+            ""
+        } else {
+            &self.actions[rng.random_range(0..self.actions.len())]
+        }
     }
 
-    /// Pick a random subject word from this config.
+    /// Pick a random subject word from this config (ActionSubject mode).
     pub fn random_subject<'a>(&'a self, rng: &mut StdRng) -> &'a str {
-        &self.subjects[rng.random_range(0..self.subjects.len())]
+        if self.subjects.is_empty() {
+            ""
+        } else {
+            &self.subjects[rng.random_range(0..self.subjects.len())]
+        }
+    }
+
+    /// Pick a random symbol from this config (Symbols mode).
+    pub fn random_symbol<'a>(&'a self, rng: &mut StdRng) -> &'a str {
+        if self.symbols.is_empty() {
+            ""
+        } else {
+            &self.symbols[rng.random_range(0..self.symbols.len())]
+        }
     }
 }
 
@@ -337,8 +410,10 @@ mod tests {
     #[test]
     fn oracle_config_default_has_100_entries() {
         let config = OracleConfig::default();
+        assert_eq!(config.mode, OracleMode::ActionSubject);
         assert_eq!(config.actions.len(), 100);
         assert_eq!(config.subjects.len(), 100);
+        assert!(config.symbols.is_empty());
     }
 
     #[test]
@@ -363,16 +438,42 @@ mod tests {
         world.add_entity(lore).unwrap();
 
         let config = OracleConfig::from_world(&world);
+        assert_eq!(config.mode, OracleMode::ActionSubject);
         assert_eq!(config.actions.len(), 2);
         assert_eq!(config.subjects.len(), 3);
         assert_eq!(config.actions[0], "Attack");
         assert_eq!(config.subjects[2], "Sword");
+        assert!(config.symbols.is_empty());
+    }
+
+    #[test]
+    fn oracle_config_from_world_symbols() {
+        let mut world = World::new(WorldMeta::new("Test"));
+        let mut lore = Entity::new(EntityKind::Lore, "Oracle Tables");
+        lore.properties.insert(
+            "oracle.symbols".to_string(),
+            MetadataValue::List(vec![
+                MetadataValue::String("Anchor".to_string()),
+                MetadataValue::String("Atom".to_string()),
+                MetadataValue::String("Bird".to_string()),
+            ]),
+        );
+        world.add_entity(lore).unwrap();
+
+        let config = OracleConfig::from_world(&world);
+        assert_eq!(config.mode, OracleMode::Symbols);
+        assert_eq!(config.symbols.len(), 3);
+        assert_eq!(config.symbols[0], "Anchor");
+        assert_eq!(config.symbols[2], "Bird");
+        assert!(config.actions.is_empty());
+        assert!(config.subjects.is_empty());
     }
 
     #[test]
     fn oracle_config_from_world_fallback_to_defaults() {
         let world = World::new(WorldMeta::new("Empty"));
         let config = OracleConfig::from_world(&world);
+        assert_eq!(config.mode, OracleMode::ActionSubject);
         assert_eq!(config.actions.len(), 100);
         assert_eq!(config.subjects.len(), 100);
     }
@@ -380,8 +481,10 @@ mod tests {
     #[test]
     fn oracle_config_random_picks() {
         let config = OracleConfig {
+            mode: OracleMode::ActionSubject,
             actions: vec!["Alpha".to_string(), "Beta".to_string()],
             subjects: vec!["One".to_string(), "Two".to_string()],
+            symbols: Vec::new(),
         };
         let mut rng = StdRng::seed_from_u64(42);
         for _ in 0..20 {
@@ -389,6 +492,25 @@ mod tests {
             let s = config.random_subject(&mut rng);
             assert!(a == "Alpha" || a == "Beta");
             assert!(s == "One" || s == "Two");
+        }
+    }
+
+    #[test]
+    fn oracle_config_random_symbol_picks() {
+        let config = OracleConfig {
+            mode: OracleMode::Symbols,
+            actions: Vec::new(),
+            subjects: Vec::new(),
+            symbols: vec![
+                "First".to_string(),
+                "Second".to_string(),
+                "Third".to_string(),
+            ],
+        };
+        let mut rng = StdRng::seed_from_u64(42);
+        for _ in 0..20 {
+            let sym = config.random_symbol(&mut rng);
+            assert!(sym == "First" || sym == "Second" || sym == "Third");
         }
     }
 }
