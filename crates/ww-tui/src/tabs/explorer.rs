@@ -517,3 +517,542 @@ fn field_line(label: &str, value: &str) -> Line<'static> {
         Span::styled(value.to_string(), Style::default().fg(Color::White)),
     ])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    use ww_core::{WorldMeta, entity::EntityKind};
+
+    /// Create a test world with several entities for testing.
+    fn create_test_world() -> World {
+        let mut world = World::new(WorldMeta::new("test-world"));
+        let _ = world.add_entity(Entity::new(EntityKind::Character, "Alice"));
+        let _ = world.add_entity(Entity::new(EntityKind::Character, "Bob"));
+        let _ = world.add_entity(Entity::new(EntityKind::Location, "Village"));
+        let _ = world.add_entity(Entity::new(EntityKind::Faction, "Guild"));
+        let _ = world.add_entity(Entity::new(EntityKind::Event, "Battle"));
+        world
+    }
+
+    #[test]
+    fn explorer_tab_initializes_with_all_entities() {
+        let world = create_test_world();
+        let tab = ExplorerTab::new(world);
+
+        assert_eq!(tab.filtered_ids.len(), 5, "Should have 5 entities");
+        assert_eq!(tab.list_cursor, 0, "Cursor should start at 0");
+        assert_eq!(tab.sub_view, SubView::List, "Should start in list view");
+        assert_eq!(
+            tab.explorer_input,
+            ExplorerInput::Normal,
+            "Should start in normal mode"
+        );
+    }
+
+    #[test]
+    fn mouse_scroll_up_decrements_list_cursor() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 3;
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 2, "ScrollUp should decrement cursor");
+    }
+
+    #[test]
+    fn mouse_scroll_up_at_zero_stays_zero() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 0;
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.list_cursor, 0,
+            "ScrollUp at 0 should stay at 0 (saturating_sub)"
+        );
+    }
+
+    #[test]
+    fn mouse_scroll_down_increments_list_cursor() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 1;
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 2, "ScrollDown should increment cursor");
+    }
+
+    #[test]
+    fn mouse_scroll_down_at_end_stays_at_end() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 4; // Last entity (5 entities, 0-indexed)
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 4, "ScrollDown at end should stay at end");
+    }
+
+    #[test]
+    fn mouse_scroll_up_decrements_detail_scroll() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.sub_view = SubView::Detail;
+        tab.detail_scroll = 10;
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.detail_scroll, 9,
+            "ScrollUp in detail should decrement scroll"
+        );
+    }
+
+    #[test]
+    fn mouse_scroll_down_increments_detail_scroll() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.sub_view = SubView::Detail;
+        tab.detail_scroll = 5;
+
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 0,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.detail_scroll, 6,
+            "ScrollDown in detail should increment scroll"
+        );
+    }
+
+    #[test]
+    fn mouse_click_selects_entity_at_row() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 0;
+
+        // Click on row 5 (row offset: 5 - 3 = 2, so index 2)
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.list_cursor, 2,
+            "Click on row 5 should select entity at index 2 (row - 3)"
+        );
+        assert_eq!(
+            tab.sub_view,
+            SubView::List,
+            "Single click should stay in list view"
+        );
+    }
+
+    #[test]
+    fn mouse_click_on_selected_opens_detail() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 1;
+
+        // Click on row 4 (row offset: 4 - 3 = 1, same as cursor)
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 4,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.sub_view,
+            SubView::Detail,
+            "Click on selected entity should open detail"
+        );
+        assert!(
+            tab.detail_entity_id.is_some(),
+            "Detail entity ID should be set"
+        );
+        assert_eq!(tab.detail_scroll, 0, "Detail scroll should be reset to 0");
+    }
+
+    #[test]
+    fn mouse_click_to_detail_pushes_to_view_stack() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 2;
+
+        assert_eq!(tab.view_stack.len(), 0, "View stack should start empty");
+
+        // Click on row 5 (row offset: 5 - 3 = 2, same as cursor)
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+
+        tab.handle_mouse(mouse);
+
+        assert_eq!(
+            tab.view_stack.len(),
+            1,
+            "View stack should have one entry after opening detail"
+        );
+        assert_eq!(
+            tab.view_stack[0],
+            SubView::List,
+            "View stack should contain List"
+        );
+    }
+
+    #[test]
+    fn esc_key_from_detail_goes_back_to_list() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Set up: in detail view with view stack
+        tab.view_stack.push(SubView::List);
+        tab.sub_view = SubView::Detail;
+        tab.detail_entity_id = Some(tab.filtered_ids[0]);
+
+        let key = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::empty());
+
+        tab.handle_key(key);
+
+        assert_eq!(
+            tab.sub_view,
+            SubView::List,
+            "Esc from detail should go back to list"
+        );
+        assert_eq!(
+            tab.view_stack.len(),
+            0,
+            "View stack should be empty after going back"
+        );
+    }
+
+    #[test]
+    fn enter_key_opens_detail_and_pushes_to_stack() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 1;
+
+        assert_eq!(tab.view_stack.len(), 0, "View stack should start empty");
+
+        let key = KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::empty());
+
+        tab.handle_key(key);
+
+        assert_eq!(
+            tab.sub_view,
+            SubView::Detail,
+            "Enter should open detail view"
+        );
+        assert_eq!(tab.view_stack.len(), 1, "View stack should have one entry");
+        assert_eq!(
+            tab.view_stack[0],
+            SubView::List,
+            "View stack should contain List"
+        );
+        assert!(
+            tab.detail_entity_id.is_some(),
+            "Detail entity ID should be set"
+        );
+    }
+
+    #[test]
+    fn mouse_click_row_offset_calculation() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Test row offset calculation: row - 3
+        // Start with cursor at 0, click row 4 (index 1) to avoid double-click
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 4,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 1, "Row 4 should map to index 1 (row - 3)");
+
+        // Click row 5 -> index 2
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 2, "Row 5 should map to index 2 (row - 3)");
+
+        // Click row 7 -> index 4
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 7,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 4, "Row 7 should map to index 4 (row - 3)");
+
+        // Click row 3 -> index 0
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 3,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(tab.list_cursor, 0, "Row 3 should map to index 0 (row - 3)");
+    }
+
+    #[test]
+    fn mouse_click_above_row_3_is_ignored() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 2;
+
+        // Click on row 0 (tab bar) - should be ignored
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.list_cursor, 2,
+            "Click on row 0 should be ignored, cursor unchanged"
+        );
+
+        // Click on row 2 (border) - should be ignored
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 2,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+        assert_eq!(
+            tab.list_cursor, 2,
+            "Click on row 2 should be ignored, cursor unchanged"
+        );
+    }
+
+    #[test]
+    fn mouse_click_out_of_bounds_is_ignored() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+        tab.list_cursor = 1;
+
+        // Click on row 20 (beyond 5 entities)
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 20,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+
+        assert_eq!(
+            tab.list_cursor, 1,
+            "Out of bounds click should not change cursor"
+        );
+        assert_eq!(
+            tab.sub_view,
+            SubView::List,
+            "Out of bounds click should not change view"
+        );
+    }
+
+    #[test]
+    fn mouse_events_in_detail_view_do_not_select_entities() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Set up: in detail view
+        tab.view_stack.push(SubView::List);
+        tab.sub_view = SubView::Detail;
+        tab.detail_entity_id = Some(tab.filtered_ids[2]);
+        tab.list_cursor = 2;
+
+        // Click on row 5 - should be ignored in detail view
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        tab.handle_mouse(mouse);
+
+        assert_eq!(
+            tab.sub_view,
+            SubView::Detail,
+            "Click in detail view should not change view"
+        );
+        assert_eq!(
+            tab.list_cursor, 2,
+            "Click in detail view should not change list cursor"
+        );
+    }
+
+    #[test]
+    fn keyboard_navigation_works() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Test j key (down)
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('j'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        assert_eq!(tab.list_cursor, 1, "j should move down");
+
+        // Test k key (up)
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('k'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        assert_eq!(tab.list_cursor, 0, "k should move up");
+
+        // Test g key (top)
+        tab.list_cursor = 3;
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('g'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        assert_eq!(tab.list_cursor, 0, "g should move to top");
+
+        // Test G key (bottom)
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('G'),
+            crossterm::event::KeyModifiers::SHIFT,
+        ));
+        assert_eq!(tab.list_cursor, 4, "G should move to bottom");
+    }
+
+    #[test]
+    fn search_mode_filters_entities() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Enter search mode
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        assert_eq!(
+            tab.explorer_input,
+            ExplorerInput::Search,
+            "/ should enter search mode"
+        );
+
+        // Type search query
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('l'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+
+        assert_eq!(tab.search_query, "al", "Search query should be 'al'");
+
+        // Confirm search
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ));
+
+        assert_eq!(
+            tab.explorer_input,
+            ExplorerInput::Normal,
+            "Enter should exit search mode"
+        );
+        assert!(
+            tab.filtered_ids.len() < 5,
+            "Filtered list should be smaller after search"
+        );
+    }
+
+    #[test]
+    fn search_mode_esc_cancels() {
+        let world = create_test_world();
+        let mut tab = ExplorerTab::new(world);
+
+        // Enter search mode and type
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('x'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::empty(),
+        ));
+
+        // Cancel with Esc
+        tab.handle_key(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::empty(),
+        ));
+
+        assert_eq!(
+            tab.explorer_input,
+            ExplorerInput::Normal,
+            "Esc should exit search mode"
+        );
+        assert_eq!(tab.search_query, "", "Esc should clear search query");
+        assert_eq!(
+            tab.filtered_ids.len(),
+            5,
+            "Filtered list should be restored"
+        );
+    }
+}
