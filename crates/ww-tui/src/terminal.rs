@@ -182,27 +182,38 @@ fn handle_mouse(app: &mut TuiApp, mouse: crossterm::event::MouseEvent) {
 
 /// Hit-test the tab bar for mouse clicks.
 fn tab_bar_hit_test(col: u16) -> Option<TabId> {
-    // Tab labels: "[1]Explorer | [2]Graph | [3]Timeline | [4]Play | [5]Solo | [6]Sheet | [7]Dice"
-    // Each label is roughly: label_len + 3 (divider " | ")
+    // Tab labels with dividers: "[1]Explorer | [2]Graph | [3]Timeline | [4]Play | [5]Solo | [6]Sheet | [7]Dice"
+    // The ratatui Tabs widget renders these sequentially with the divider between them.
+    // We need to account for the exact rendering including dividers.
+
     let labels = [
-        "[1]Explorer",
-        "[2]Graph",
-        "[3]Timeline",
-        "[4]Play",
-        "[5]Solo",
-        "[6]Sheet",
-        "[7]Dice",
+        ("[1]Explorer", 11), // 11 chars
+        ("[2]Graph", 9),     // 9 chars
+        ("[3]Timeline", 12), // 12 chars
+        ("[4]Play", 8),      // 8 chars
+        ("[5]Solo", 8),      // 8 chars
+        ("[6]Sheet", 9),     // 9 chars
+        ("[7]Dice", 8),      // 8 chars
     ];
-    let divider_len = 3; // " | "
+
+    let divider_len = 3u16; // " | " is 3 chars
 
     let mut x = 0u16;
-    for (i, label) in labels.iter().enumerate() {
-        let label_len = label.len() as u16;
-        if col >= x && col < x + label_len {
+    for (i, (_, len)) in labels.iter().enumerate() {
+        let end_x = x + len;
+
+        // Check if click is within this tab's label area
+        if col >= x && col < end_x {
             return Some(TabId::ALL[i]);
         }
-        x += label_len + divider_len;
+
+        // Move past the label and divider (except for last tab)
+        x = end_x;
+        if i < labels.len() - 1 {
+            x += divider_len;
+        }
     }
+
     None
 }
 
