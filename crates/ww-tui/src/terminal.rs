@@ -187,20 +187,21 @@ fn tab_bar_hit_test(col: u16) -> Option<TabId> {
     // We need to account for the exact rendering including dividers.
 
     let labels = [
-        ("[1]Explorer", 11), // 11 chars
-        ("[2]Graph", 9),     // 9 chars
-        ("[3]Timeline", 12), // 12 chars
-        ("[4]Play", 8),      // 8 chars
-        ("[5]Solo", 8),      // 8 chars
-        ("[6]Sheet", 9),     // 9 chars
-        ("[7]Dice", 8),      // 8 chars
+        "[1]Explorer",
+        "[2]Graph",
+        "[3]Timeline",
+        "[4]Play",
+        "[5]Solo",
+        "[6]Sheet",
+        "[7]Dice",
     ];
 
     let divider_len = 3u16; // " | " is 3 chars
 
     let mut x = 0u16;
-    for (i, (_, len)) in labels.iter().enumerate() {
-        let end_x = x + len;
+    for (i, label) in labels.iter().enumerate() {
+        let label_len = label.len() as u16;
+        let end_x = x + label_len;
 
         // Check if click is within this tab's label area
         if col >= x && col < end_x {
