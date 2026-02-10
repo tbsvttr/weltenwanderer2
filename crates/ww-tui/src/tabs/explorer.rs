@@ -198,6 +198,28 @@ impl Tab for ExplorerTab {
         false
     }
 
+    fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) {
+        use crossterm::event::MouseEventKind;
+
+        match mouse.kind {
+            MouseEventKind::ScrollUp => match self.sub_view {
+                SubView::List => self.list_cursor = self.list_cursor.saturating_sub(1),
+                SubView::Detail => self.detail_scroll = self.detail_scroll.saturating_sub(1),
+            },
+            MouseEventKind::ScrollDown => match self.sub_view {
+                SubView::List => {
+                    if self.list_cursor + 1 < self.filtered_ids.len() {
+                        self.list_cursor += 1;
+                    }
+                }
+                SubView::Detail => {
+                    self.detail_scroll = self.detail_scroll.saturating_add(1);
+                }
+            },
+            _ => {}
+        }
+    }
+
     fn draw(&self, frame: &mut Frame, area: Rect) {
         match self.sub_view {
             SubView::List => draw_entity_list(frame, self, area),
