@@ -9,6 +9,7 @@ pub mod solo;
 pub mod timeline;
 
 use ratatui::prelude::*;
+use ratatui::widgets::Clear;
 
 /// Identifies which tab is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,9 +107,8 @@ pub trait Tab {
 
 /// Draw the tab bar.
 pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
-    // First, clear the entire area with a black background block
-    let clear_block = ratatui::widgets::Block::default().style(Style::default().bg(Color::Black));
-    frame.render_widget(clear_block, area);
+    // First, clear the entire area (ratatui standard practice)
+    frame.render_widget(Clear, area);
 
     let titles = [
         "[1]Explorer",
@@ -155,7 +155,7 @@ pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
     }
 
     let line = Line::from(spans);
-    let paragraph = ratatui::widgets::Paragraph::new(line);
+    let paragraph = ratatui::widgets::Paragraph::new(line).style(Style::default().bg(Color::Black));
     frame.render_widget(paragraph, area);
 }
 

@@ -209,17 +209,8 @@ fn tab_bar_hit_test(col: u16) -> Option<TabId> {
         };
         let end_x = x + clickable_width;
 
-        // Debug logging (compile out in release builds)
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "DEBUG: Tab {}: '{}' range [{}, {}), checking col {}",
-            i, label, x, end_x, col
-        );
-
         // Check if click is within this tab's clickable area (label + divider)
         if col >= x && col < end_x {
-            #[cfg(debug_assertions)]
-            eprintln!("DEBUG: Hit! Returning tab {}", i);
             return Some(TabId::ALL[i]);
         }
 
@@ -227,8 +218,6 @@ fn tab_bar_hit_test(col: u16) -> Option<TabId> {
         x = end_x;
     }
 
-    #[cfg(debug_assertions)]
-    eprintln!("DEBUG: No hit for col {}", col);
     None
 }
 
