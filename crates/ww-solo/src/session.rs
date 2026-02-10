@@ -5,6 +5,7 @@
 //! tracking, and journaling.
 
 use chrono::Utc;
+use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -169,6 +170,210 @@ impl SoloSession {
         }
     }
 
+    /// Return tab-completion candidates for partial input.
+    ///
+    /// Given the text the user has typed so far, returns a list of possible
+    /// completions as full command strings. Completions expecting further
+    /// arguments end with a trailing space.
+    pub fn completions(&self, input: &str) -> Vec<String> {
+        let trimmed = input.trim_start();
+
+        // Top-level command list (used for empty input and prefix matching)
+        let commands: &[&str] = &[
+            "ask ",
+            "reaction ",
+            "event",
+            "scene ",
+            "end scene ",
+            "check ",
+            "roll ",
+            "panic",
+            "encounter ",
+            "sheet",
+            "status",
+            "journal",
+            "threads",
+            "npcs",
+            "note ",
+            "export ",
+            "thread add ",
+            "thread close ",
+            "thread remove ",
+            "npc add ",
+            "npc remove ",
+            "help",
+            "look",
+            "go ",
+        ];
+
+        if trimmed.is_empty() {
+            return commands.iter().map(|c| c.to_string()).collect();
+        }
+
+        let lower = trimmed.to_lowercase();
+        let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
+        let cmd = parts[0].to_lowercase();
+        let rest = parts.get(1).copied().unwrap_or("");
+
+        match cmd.as_str() {
+            "ask" if parts.len() > 1 => {
+                let rest_lower = rest.to_lowercase();
+                let likelihoods = [
+                    "impossible",
+                    "no way",
+                    "very unlikely",
+                    "unlikely",
+                    "50/50",
+                    "somewhat likely",
+                    "likely",
+                    "very likely",
+                    "near sure thing",
+                    "a sure thing",
+                    "has to be",
+                ];
+                likelihoods
+                    .iter()
+                    .filter(|l| l.starts_with(&rest_lower))
+                    .map(|l| format!("ask {l} "))
+                    .collect()
+            }
+            "check" if parts.len() > 1 => {
+                if let Some(sheet) = &self.sheet {
+                    let rest_lower = rest.to_lowercase();
+                    sheet
+                        .attributes
+                        .keys()
+                        .filter(|a| a.to_lowercase().starts_with(&rest_lower))
+                        .map(|a| format!("check {a}"))
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            "roll" if parts.len() > 1 => {
+                let rest_lower = rest.to_lowercase();
+                let dice = [
+                    "d4", "d6", "d8", "d10", "d12", "d20", "d100", "2d6", "2d10", "2d20",
+                ];
+                dice.iter()
+                    .filter(|d| d.starts_with(&rest_lower))
+                    .map(|d| format!("roll {d}"))
+                    .collect()
+            }
+            "encounter" if parts.len() > 1 => {
+                let rest_lower = rest.to_lowercase();
+                self.fiction
+                    .world()
+                    .all_entities()
+                    .filter(|e| e.name.to_lowercase().starts_with(&rest_lower))
+                    .map(|e| format!("encounter {}", e.name))
+                    .collect()
+            }
+            "reaction" if parts.len() > 1 => {
+                let rest_lower = rest.to_lowercase();
+                self.npcs
+                    .list()
+                    .iter()
+                    .filter(|n| n.name.to_lowercase().starts_with(&rest_lower))
+                    .map(|n| format!("reaction {}", n.name))
+                    .collect()
+            }
+            "thread" => {
+                let sub_parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                let sub = sub_parts[0].to_lowercase();
+                let sub_rest = sub_parts.get(1).copied().unwrap_or("");
+
+                if sub.is_empty()
+                    || (!["add", "close", "remove"].contains(&sub.as_str())
+                        && ["add", "close", "remove"]
+                            .iter()
+                            .any(|s| s.starts_with(&sub)))
+                {
+                    ["add", "close", "remove"]
+                        .iter()
+                        .filter(|s| s.starts_with(&sub))
+                        .map(|s| format!("thread {s} "))
+                        .collect()
+                } else if (sub == "close" || sub == "remove") && sub_parts.len() > 1 {
+                    let name_lower = sub_rest.to_lowercase();
+                    self.threads
+                        .active()
+                        .iter()
+                        .filter(|t| {
+                            name_lower.is_empty() || t.name.to_lowercase().starts_with(&name_lower)
+                        })
+                        .map(|t| format!("thread {sub} {}", t.name))
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            "npc" => {
+                let sub_parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                let sub = sub_parts[0].to_lowercase();
+                if sub.is_empty() {
+                    vec!["npc add ".to_string(), "npc remove ".to_string()]
+                } else if sub == "remove" {
+                    let name_prefix = sub_parts.get(1).copied().unwrap_or("");
+                    if name_prefix.is_empty() {
+                        self.npcs
+                            .list()
+                            .iter()
+                            .map(|n| format!("npc remove {}", n.name))
+                            .collect()
+                    } else {
+                        let lower_prefix = name_prefix.to_lowercase();
+                        self.npcs
+                            .list()
+                            .iter()
+                            .filter(|n| n.name.to_lowercase().starts_with(&lower_prefix))
+                            .map(|n| format!("npc remove {}", n.name))
+                            .collect()
+                    }
+                } else {
+                    vec![]
+                }
+            }
+            "export" if parts.len() > 1 => {
+                let rest_lower = rest.to_lowercase();
+                ["markdown", "text"]
+                    .iter()
+                    .filter(|f| f.starts_with(&rest_lower))
+                    .map(|f| format!("export {f}"))
+                    .collect()
+            }
+            "end" => {
+                let rest_lower = rest.to_lowercase();
+                if rest_lower.starts_with("scene") {
+                    let after = rest.get(5..).map(|s| s.trim_start()).unwrap_or("");
+                    if after.is_empty() {
+                        vec![
+                            "end scene well ".to_string(),
+                            "end scene badly ".to_string(),
+                        ]
+                    } else {
+                        let after_lower = after.to_lowercase();
+                        ["well ", "badly "]
+                            .iter()
+                            .filter(|o| o.starts_with(&after_lower))
+                            .map(|o| format!("end scene {o}"))
+                            .collect()
+                    }
+                } else {
+                    vec!["end scene ".to_string()]
+                }
+            }
+            _ => {
+                // Prefix-match top-level commands
+                commands
+                    .iter()
+                    .filter(|c| c.starts_with(&lower))
+                    .map(|c| c.to_string())
+                    .collect()
+            }
+        }
+    }
+
     /// Process a line of user input and return a response.
     pub fn process(&mut self, input: &str) -> SoloResult<String> {
         let trimmed = input.trim();
@@ -202,6 +407,8 @@ impl SoloSession {
             "export" => self.do_journal_export(rest),
             "check" => self.do_check(rest),
             "roll" => self.do_roll(rest),
+            "panic" => self.do_panic(),
+            "encounter" => self.do_encounter(rest),
             "sheet" => self.do_sheet(),
             "status" => self.do_status(),
             "help" => self.do_help(rest),
@@ -265,9 +472,14 @@ impl SoloSession {
         }
 
         let result = roll_npc_reaction(&mut self.rng);
+        let prefix = self
+            .world_config
+            .reaction_prefix
+            .as_deref()
+            .unwrap_or("NPC Reaction");
         let output = format!(
-            "NPC Reaction ({}): {} (roll {})",
-            npc_name, result.reaction, result.roll
+            "{prefix} ({npc_name}): {} (roll {})",
+            result.reaction, result.roll
         );
 
         self.journal.append(JournalEntry::NpcReaction {
@@ -283,7 +495,12 @@ impl SoloSession {
     fn do_event(&mut self) -> SoloResult<String> {
         let event = generate_random_event(&mut self.rng, &self.oracle_config);
         let desc = event.to_string();
-        let output = format!("Random Event: {desc}");
+        let prefix = self
+            .world_config
+            .event_prefix
+            .as_deref()
+            .unwrap_or("Random Event:");
+        let output = format!("{prefix} {desc}");
 
         self.journal.append(JournalEntry::RandomEvent {
             description: desc,
@@ -302,20 +519,42 @@ impl SoloSession {
 
         self.scene_count += 1;
         let status = check_scene_setup(self.chaos.value(), &mut self.rng, &self.oracle_config);
+        let n = self.scene_count;
 
         let status_text = status.to_string();
-        let mut output = format!("--- Scene {} ---\nSetup: {setup}\n", self.scene_count);
+        let header = self
+            .world_config
+            .scene_header
+            .as_deref()
+            .unwrap_or("--- Scene {n} ---")
+            .replace("{n}", &n.to_string());
+        let mut output = format!("{header}\nSetup: {setup}\n");
 
         match &status {
             SceneStatus::Normal => {
-                output.push_str("The scene proceeds as expected.");
+                let text = self
+                    .world_config
+                    .scene_normal
+                    .as_deref()
+                    .unwrap_or("The scene proceeds as expected.");
+                output.push_str(text);
             }
             SceneStatus::Altered => {
-                output.push_str("The scene is ALTERED! Something is different than expected.");
+                let text = self
+                    .world_config
+                    .scene_altered
+                    .as_deref()
+                    .unwrap_or("The scene is ALTERED! Something is different than expected.");
+                output.push_str(text);
             }
             SceneStatus::Interrupted(event) => {
+                let text = self
+                    .world_config
+                    .scene_interrupted
+                    .as_deref()
+                    .unwrap_or("The scene is INTERRUPTED!");
                 output.push_str(&format!(
-                    "The scene is INTERRUPTED!\n  {event}\nSomething completely unexpected happens."
+                    "{text}\n  {event}\nSomething completely unexpected happens."
                 ));
             }
         }
@@ -358,8 +597,19 @@ impl SoloSession {
         let scene_num = self.current_scene.as_ref().unwrap().number;
         self.current_scene = None;
 
+        let end_label = self
+            .world_config
+            .scene_end
+            .as_deref()
+            .unwrap_or("End of Scene {n}:")
+            .replace("{n}", &scene_num.to_string());
+        let chaos_label = self
+            .world_config
+            .chaos_label
+            .as_deref()
+            .unwrap_or("Chaos factor");
         let output = format!(
-            "End of Scene {scene_num}: {summary}\nChaos factor: {} ({})",
+            "{end_label} {summary}\n{chaos_label}: {} ({})",
             self.chaos.value(),
             if went_well { "-1" } else { "+1" }
         );
@@ -569,6 +819,108 @@ impl SoloSession {
         Ok(output)
     }
 
+    fn do_panic(&mut self) -> SoloResult<String> {
+        let roll: u32 = self.rng.random_range(1..=20);
+
+        // Get current Stress (or 0 if no sheet/track)
+        let stress = self
+            .sheet
+            .as_ref()
+            .and_then(|s| s.tracks.get("Stress"))
+            .map(|t| t.current)
+            .unwrap_or(0);
+
+        let triggered = roll as i32 <= stress;
+        let mut output = format!("PANIC check: d20 -> {roll} (vs Stress {stress})\n");
+
+        if triggered {
+            output.push_str(&format!(
+                "PANIC! Consult the PANIC chart for effect {roll}."
+            ));
+        } else {
+            output.push_str("No effect — roll exceeds current Stress.");
+        }
+
+        // Increment Stress by 1
+        if let Some(sheet) = &mut self.sheet
+            && let Some(track) = sheet.tracks.get_mut("Stress")
+        {
+            let old = track.current;
+            track.adjust(1);
+            output.push_str(&format!("\nStress: {old} -> {}", track.current));
+        }
+
+        self.journal.append(JournalEntry::DiceRoll {
+            expression: "d20 (PANIC)".to_string(),
+            values: vec![roll],
+            total: roll,
+            timestamp: Utc::now(),
+        });
+
+        Ok(output)
+    }
+
+    fn do_encounter(&self, name: &str) -> SoloResult<String> {
+        if name.is_empty() {
+            return Err(SoloError::InvalidChoice(
+                "usage: encounter <creature name>".to_string(),
+            ));
+        }
+
+        let world = self.fiction.world();
+        let entity = world
+            .find_by_name(name)
+            .ok_or_else(|| SoloError::InvalidChoice(format!("creature not found: {name}")))?;
+
+        let mut output = format!("=== {} ===\n", entity.name);
+
+        // Read creature stats from properties
+        if let Some(val) = entity.properties.get("type") {
+            output.push_str(&format!("Type: {val}\n"));
+        }
+
+        let combat = entity.properties.get("combat");
+        let instinct = entity.properties.get("instinct");
+        let hits = entity.properties.get("hits");
+
+        if combat.is_some() || instinct.is_some() || hits.is_some() {
+            let mut stats = Vec::new();
+            if let Some(v) = combat {
+                stats.push(format!("Combat: {v}"));
+            }
+            if let Some(v) = instinct {
+                stats.push(format!("Instinct: {v}"));
+            }
+            if let Some(v) = hits {
+                stats.push(format!("Hits: {v}"));
+            }
+            output.push_str(&stats.join(" | "));
+            output.push('\n');
+        }
+
+        if let Some(val) = entity.properties.get("weapon") {
+            output.push_str(&format!("Weapon: {val}\n"));
+        }
+
+        // Collect trait-* properties
+        let mut traits: Vec<_> = entity
+            .properties
+            .iter()
+            .filter(|(k, _)| k.starts_with("trait-"))
+            .collect();
+        traits.sort_by_key(|(k, _)| (*k).clone());
+        for (key, val) in &traits {
+            let trait_name = key.strip_prefix("trait-").unwrap_or(key);
+            output.push_str(&format!("- {trait_name}: {val}\n"));
+        }
+
+        if !entity.description.is_empty() {
+            output.push_str(&format!("\n{}", entity.description));
+        }
+
+        Ok(output.trim_end().to_string())
+    }
+
     fn do_sheet(&self) -> SoloResult<String> {
         let Some(ruleset) = &self.ruleset else {
             return Err(SoloError::InvalidChoice(
@@ -624,7 +976,12 @@ impl SoloSession {
     }
 
     fn do_status(&self) -> SoloResult<String> {
-        let mut out = format!("Chaos Factor: {}/9\n", self.chaos.value());
+        let chaos_label = self
+            .world_config
+            .chaos_label
+            .as_deref()
+            .unwrap_or("Chaos Factor");
+        let mut out = format!("{chaos_label}: {}/9\n", self.chaos.value());
 
         match &self.current_scene {
             Some(scene) => out.push_str(&format!("Current Scene: #{}\n", scene.number)),
@@ -684,10 +1041,12 @@ Journal Commands:
   journal                       Show recent entries
   export [markdown|text]        Export full journal"
                 .to_string()),
-            "mechanics" | "check" | "roll" | "sheet" => Ok("\
+            "mechanics" | "check" | "roll" | "sheet" | "panic" | "encounter" => Ok("\
 Mechanics Commands:
   check <attribute> [modifier]  Roll a check using world rules
   roll <dice>                   Roll dice (e.g., d100, 2d6, d20)
+  panic                         PANIC check (d20 vs Stress, +1 Stress)
+  encounter <creature>          Show creature stats from world
   sheet                         Show character attributes and tracks"
                 .to_string()),
             _ if self.world_config.help.is_some() => {
@@ -702,6 +1061,8 @@ Solo TTRPG Commands:
   end scene [well|badly] <text> End current scene
   check <attribute> [modifier]  Roll a mechanics check
   roll <dice>                   Roll dice (d100, 2d6, d20)
+  panic                         PANIC check (d20 vs Stress)
+  encounter <creature>          Show creature stats
   sheet                         Show character sheet
   thread add|close|remove       Manage plot threads
   threads                       List threads
@@ -1402,5 +1763,287 @@ mod tests {
             s.world_config().oracle_prefix.as_deref(),
             Some("The spirits whisper..."),
         );
+    }
+
+    // --- Scene/status/event/reaction config tests ---
+
+    fn world_with_full_solo_config() -> World {
+        let mut world = World::new(WorldMeta::new("Configured World"));
+        let tavern = Entity::new(EntityKind::Location, "the Tavern");
+        world.add_entity(tavern).unwrap();
+        world.meta.properties.insert(
+            "solo.scene_header".to_string(),
+            MetadataValue::String("=== Log #{n} ===".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.scene_normal".to_string(),
+            MetadataValue::String("All quiet in the tunnel.".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.scene_altered".to_string(),
+            MetadataValue::String("The walls have shifted.".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.scene_interrupted".to_string(),
+            MetadataValue::String("A tremor runs through the walls.".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.scene_end".to_string(),
+            MetadataValue::String("Log #{n} sealed.".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.chaos_label".to_string(),
+            MetadataValue::String("Pressure".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.event_prefix".to_string(),
+            MetadataValue::String("The tunnel shifts:".to_string()),
+        );
+        world.meta.properties.insert(
+            "solo.reaction_prefix".to_string(),
+            MetadataValue::String("Response".to_string()),
+        );
+        world
+    }
+
+    fn full_config_session() -> SoloSession {
+        SoloSession::new(world_with_full_solo_config(), SoloConfig::default()).unwrap()
+    }
+
+    #[test]
+    fn scene_custom_header() {
+        let mut s = full_config_session();
+        let output = s.process("scene Enter the tunnel").unwrap();
+        assert!(output.contains("=== Log #1 ==="));
+        assert!(output.contains("Enter the tunnel"));
+    }
+
+    #[test]
+    fn scene_custom_end() {
+        let mut s = full_config_session();
+        s.process("scene Enter the tunnel").unwrap();
+        let output = s.process("end scene well All clear").unwrap();
+        assert!(output.contains("Log #1 sealed."));
+        assert!(output.contains("Pressure:"));
+    }
+
+    #[test]
+    fn chaos_label_custom_in_status() {
+        let s = full_config_session();
+        let status = s.do_status().unwrap();
+        assert!(status.contains("Pressure: 5/9"));
+    }
+
+    #[test]
+    fn event_prefix_custom() {
+        let mut s = full_config_session();
+        let output = s.process("event").unwrap();
+        assert!(output.starts_with("The tunnel shifts:"));
+    }
+
+    #[test]
+    fn reaction_prefix_custom() {
+        let mut s = full_config_session();
+        let output = s.process("reaction Guard").unwrap();
+        assert!(output.starts_with("Response (Guard):"));
+    }
+
+    // --- Panic tests ---
+
+    /// Mechanics world with Stress track starting at 0 (via character override).
+    fn low_stress_world() -> World {
+        let mut world = mechanics_world();
+        // Override Stress to 0 on the character
+        let id = world.find_id_by_name("Lamplighter").unwrap();
+        let character = world.get_entity_mut(id).unwrap();
+        character
+            .properties
+            .insert("mechanics.stress".to_string(), MetadataValue::Integer(0));
+        world
+    }
+
+    #[test]
+    fn panic_no_effect() {
+        // With Stress at 0, any d20 roll (1-20) > 0 so no panic
+        let mut s = SoloSession::new(low_stress_world(), SoloConfig::default()).unwrap();
+        let output = s.process("panic").unwrap();
+        assert!(output.contains("PANIC check: d20 ->"));
+        assert!(output.contains("vs Stress 0"));
+        assert!(output.contains("No effect"));
+        assert!(output.contains("Stress: 0 -> 1"));
+    }
+
+    #[test]
+    fn panic_triggered() {
+        // Default mechanics world: Stress starts at 20, so d20 (1-20) always <= 20
+        let mut s = mechanics_session();
+        let output = s.process("panic").unwrap();
+        assert!(output.contains("PANIC check: d20 ->"));
+        assert!(output.contains("vs Stress 20"));
+        assert!(output.contains("PANIC!"));
+    }
+
+    #[test]
+    fn panic_stress_increments() {
+        let mut s = SoloSession::new(low_stress_world(), SoloConfig::default()).unwrap();
+        let output1 = s.process("panic").unwrap();
+        assert!(output1.contains("Stress: 0 -> 1"));
+
+        let output2 = s.process("panic").unwrap();
+        assert!(output2.contains("vs Stress 1"));
+        assert!(output2.contains("Stress: 1 -> 2"));
+    }
+
+    #[test]
+    fn panic_journals_roll() {
+        let mut s = mechanics_session();
+        let initial_len = s.journal().len();
+        s.process("panic").unwrap();
+        assert_eq!(s.journal().len(), initial_len + 1);
+    }
+
+    // --- Encounter tests ---
+
+    fn creature_world() -> World {
+        let mut world = World::new(WorldMeta::new("Creature World"));
+        let tavern = Entity::new(EntityKind::Location, "the Tavern");
+        world.add_entity(tavern).unwrap();
+
+        let mut crab = Entity::new(
+            EntityKind::Custom("creature".to_string()),
+            "Spindle-graft Crab",
+        );
+        crab.properties.insert(
+            "type".to_string(),
+            MetadataValue::String("wildlife".to_string()),
+        );
+        crab.properties
+            .insert("combat".to_string(), MetadataValue::Integer(40));
+        crab.properties
+            .insert("instinct".to_string(), MetadataValue::Integer(30));
+        crab.properties
+            .insert("hits".to_string(), MetadataValue::Integer(2));
+        crab.properties.insert(
+            "weapon".to_string(),
+            MetadataValue::String("Pincer [1d10]".to_string()),
+        );
+        crab.properties.insert(
+            "trait-distress".to_string(),
+            MetadataValue::String("will attract other crabs".to_string()),
+        );
+        world.add_entity(crab).unwrap();
+        world
+    }
+
+    #[test]
+    fn encounter_shows_stats() {
+        let s = SoloSession::new(creature_world(), SoloConfig::default()).unwrap();
+        let output = s.do_encounter("Spindle-graft Crab").unwrap();
+        assert!(output.contains("=== Spindle-graft Crab ==="));
+        assert!(output.contains("Type: wildlife"));
+        assert!(output.contains("Combat: 40"));
+        assert!(output.contains("Instinct: 30"));
+        assert!(output.contains("Hits: 2"));
+        assert!(output.contains("Weapon: Pincer [1d10]"));
+        assert!(output.contains("distress: will attract other crabs"));
+    }
+
+    #[test]
+    fn encounter_not_found() {
+        let s = SoloSession::new(creature_world(), SoloConfig::default()).unwrap();
+        let result = s.do_encounter("nonexistent");
+        assert!(result.is_err());
+    }
+
+    // --- Completion tests ---
+
+    #[test]
+    fn completions_empty_returns_commands() {
+        let s = test_session();
+        let c = s.completions("");
+        assert!(c.contains(&"ask ".to_string()));
+        assert!(c.contains(&"event".to_string()));
+        assert!(c.contains(&"panic".to_string()));
+        assert!(c.len() > 10);
+    }
+
+    #[test]
+    fn completions_partial_command() {
+        let s = test_session();
+        let c = s.completions("ch");
+        assert!(c.contains(&"check ".to_string()));
+        assert!(!c.contains(&"ask ".to_string()));
+    }
+
+    #[test]
+    fn completions_ask_likelihood() {
+        let s = test_session();
+        let c = s.completions("ask lik");
+        assert!(c.contains(&"ask likely ".to_string()));
+        assert!(!c.contains(&"ask unlikely ".to_string()));
+    }
+
+    #[test]
+    fn completions_check_attribute() {
+        let s = mechanics_session();
+        let c = s.completions("check str");
+        assert!(c.contains(&"check Strength".to_string()));
+        assert!(!c.contains(&"check Speed".to_string()));
+    }
+
+    #[test]
+    fn completions_check_empty_lists_all_attributes() {
+        let s = mechanics_session();
+        let c = s.completions("check ");
+        assert!(!c.is_empty());
+        assert!(c.contains(&"check Strength".to_string()));
+    }
+
+    #[test]
+    fn completions_ask_empty_lists_likelihoods() {
+        let s = test_session();
+        let c = s.completions("ask ");
+        assert!(c.contains(&"ask likely ".to_string()));
+        assert!(c.contains(&"ask 50/50 ".to_string()));
+    }
+
+    #[test]
+    fn completions_reaction_npc() {
+        let mut s = test_session();
+        s.process("npc add Guard Captain").unwrap();
+        let c = s.completions("reaction Gu");
+        assert!(c.contains(&"reaction Guard Captain".to_string()));
+    }
+
+    #[test]
+    fn completions_thread_subcommand() {
+        let s = test_session();
+        let c = s.completions("thread ");
+        assert!(c.contains(&"thread add ".to_string()));
+        assert!(c.contains(&"thread close ".to_string()));
+        assert!(c.contains(&"thread remove ".to_string()));
+    }
+
+    #[test]
+    fn completions_export_format() {
+        let s = test_session();
+        let c = s.completions("export m");
+        assert!(c.contains(&"export markdown".to_string()));
+        assert!(!c.contains(&"export text".to_string()));
+    }
+
+    #[test]
+    fn completions_end_scene_outcome() {
+        let s = test_session();
+        let c = s.completions("end scene ");
+        assert!(c.contains(&"end scene well ".to_string()));
+        assert!(c.contains(&"end scene badly ".to_string()));
+    }
+
+    #[test]
+    fn completions_encounter_entity() {
+        let s = SoloSession::new(creature_world(), SoloConfig::default()).unwrap();
+        let c = s.completions("encounter Spin");
+        assert!(c.contains(&"encounter Spindle-graft Crab".to_string()));
     }
 }

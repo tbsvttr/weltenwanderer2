@@ -1,7 +1,6 @@
 //! CLI frontend for the Weltenwanderer world-building engine.
 
 mod commands;
-mod tui;
 
 use std::path::PathBuf;
 use std::process;
@@ -221,7 +220,7 @@ fn main() {
         } => commands::simulate::run(&dir, ticks, seed, speed, verbose),
         Commands::Play { dir } => commands::play::run(&dir),
         Commands::Solo { dir, seed, chaos } => commands::solo::run(&dir, seed, chaos),
-        Commands::Tui { dir } => commands::compile_dir_for_tui(&dir).and_then(tui::run),
+        Commands::Tui { dir } => commands::tui::run(&dir),
         Commands::Lsp => {
             // Exec the separate ww-lsp binary
             let status = std::process::Command::new("ww-lsp")

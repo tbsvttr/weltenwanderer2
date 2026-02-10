@@ -1,18 +1,14 @@
-//! Launch the ww-tui standalone binary for solo TTRPG sessions.
+//! Launch the ww-tui standalone binary for world exploration.
 
 use std::path::Path;
 
-/// Launch the ww-tui standalone binary for solo TTRPG sessions.
-pub fn run(dir: &Path, seed: u64, chaos: u32) -> Result<(), String> {
+/// Launch the ww-tui standalone binary.
+pub fn run(dir: &Path) -> Result<(), String> {
     let status = std::process::Command::new("ww-tui")
         .arg("--world")
         .arg(dir)
         .arg("--tab")
-        .arg("solo")
-        .arg("--seed")
-        .arg(seed.to_string())
-        .arg("--chaos")
-        .arg(chaos.to_string())
+        .arg("explorer")
         .status();
 
     match status {

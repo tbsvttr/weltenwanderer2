@@ -11,6 +11,7 @@ pub mod show;
 pub mod simulate;
 pub mod solo;
 pub mod timeline;
+pub mod tui;
 
 use std::path::Path;
 
@@ -18,14 +19,9 @@ use ww_core::World;
 use ww_dsl::CompileResult;
 use ww_dsl::diagnostics::{Severity, render_diagnostics};
 
-/// Compile for TUI: same as compile_dir but public for main.rs to call.
-pub fn compile_dir_for_tui(dir: &Path) -> Result<World, String> {
-    compile_dir(dir)
-}
-
 /// Compile a directory of .ww files and print diagnostics.
 /// Returns the compiled world if there are no errors.
-fn compile_dir(dir: &Path) -> Result<World, String> {
+pub fn compile_dir(dir: &Path) -> Result<World, String> {
     let result = ww_dsl::compile_dir(dir);
     print_diagnostics(&result, dir);
 

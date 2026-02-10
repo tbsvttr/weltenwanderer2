@@ -1,12 +1,12 @@
 [package]
-name = "ww-gui"
-description = "Pixel art GUI for Weltenwanderer"
+name = "ww-tui"
+description = "Terminal UI for Weltenwanderer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "ww-gui"
+name = "ww-tui"
 path = "src/main.rs"
 
 [dependencies]
@@ -15,7 +15,9 @@ ww-dsl = { workspace = true }
 ww-fiction = { workspace = true }
 ww-solo = { workspace = true }
 ww-mechanics = { workspace = true }
-macroquad = { workspace = true }
+clap = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
 rand = { workspace = true }
 
 [lints]

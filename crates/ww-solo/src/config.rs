@@ -50,6 +50,14 @@ impl SoloConfig {
 ///         intro "Welcome to the adventure..."
 ///         oracle_prefix "The spirits whisper..."
 ///         help "Use 'go' to move, 'ask' for the oracle."
+///         scene_header "=== Log #{n} ==="
+///         scene_normal "The section stretches ahead."
+///         scene_altered "Something is wrong."
+///         scene_interrupted "A tremor runs through the walls."
+///         scene_end "Log #{n} sealed."
+///         chaos_label "Pressure"
+///         event_prefix "The tunnel shifts:"
+///         reaction_prefix "Response"
 ///     }
 /// }
 /// ```
@@ -61,18 +69,42 @@ pub struct SoloWorldConfig {
     pub oracle_prefix: Option<String>,
     /// Custom help text shown for the generic `help` command.
     pub help: Option<String>,
+    /// Scene header format. Supports `{n}` placeholder for scene number.
+    pub scene_header: Option<String>,
+    /// Text shown when a scene proceeds normally.
+    pub scene_normal: Option<String>,
+    /// Text shown when a scene is altered.
+    pub scene_altered: Option<String>,
+    /// Text shown when a scene is interrupted.
+    pub scene_interrupted: Option<String>,
+    /// Scene end format. Supports `{n}` placeholder for scene number.
+    pub scene_end: Option<String>,
+    /// Label for the chaos factor (e.g. "Pressure", "Dread").
+    pub chaos_label: Option<String>,
+    /// Prefix for random event output.
+    pub event_prefix: Option<String>,
+    /// Prefix for NPC reaction output.
+    pub reaction_prefix: Option<String>,
 }
 
 impl SoloWorldConfig {
     /// Load solo world configuration from world meta properties.
     ///
-    /// Reads `solo.intro`, `solo.oracle_prefix`, and `solo.help` from the
-    /// properties map. Missing keys result in `None` (fallback to defaults).
+    /// Reads `solo.*` keys from the properties map.
+    /// Missing keys result in `None` (fallback to defaults).
     pub fn from_world_meta(properties: &HashMap<String, MetadataValue>) -> Self {
         Self {
             intro: extract_string(properties, "solo.intro"),
             oracle_prefix: extract_string(properties, "solo.oracle_prefix"),
             help: extract_string(properties, "solo.help"),
+            scene_header: extract_string(properties, "solo.scene_header"),
+            scene_normal: extract_string(properties, "solo.scene_normal"),
+            scene_altered: extract_string(properties, "solo.scene_altered"),
+            scene_interrupted: extract_string(properties, "solo.scene_interrupted"),
+            scene_end: extract_string(properties, "solo.scene_end"),
+            chaos_label: extract_string(properties, "solo.chaos_label"),
+            event_prefix: extract_string(properties, "solo.event_prefix"),
+            reaction_prefix: extract_string(properties, "solo.reaction_prefix"),
         }
     }
 }
@@ -147,5 +179,66 @@ mod tests {
         props.insert("solo.intro".to_string(), MetadataValue::Integer(42));
         let cfg = SoloWorldConfig::from_world_meta(&props);
         assert!(cfg.intro.is_none());
+    }
+
+    #[test]
+    fn solo_world_config_all_new_fields() {
+        let mut props = HashMap::new();
+        props.insert(
+            "solo.scene_header".to_string(),
+            MetadataValue::String("=== Log #{n} ===".to_string()),
+        );
+        props.insert(
+            "solo.scene_normal".to_string(),
+            MetadataValue::String("All quiet.".to_string()),
+        );
+        props.insert(
+            "solo.scene_altered".to_string(),
+            MetadataValue::String("Something shifted.".to_string()),
+        );
+        props.insert(
+            "solo.scene_interrupted".to_string(),
+            MetadataValue::String("A tremor!".to_string()),
+        );
+        props.insert(
+            "solo.scene_end".to_string(),
+            MetadataValue::String("Log #{n} sealed.".to_string()),
+        );
+        props.insert(
+            "solo.chaos_label".to_string(),
+            MetadataValue::String("Pressure".to_string()),
+        );
+        props.insert(
+            "solo.event_prefix".to_string(),
+            MetadataValue::String("The tunnel shifts:".to_string()),
+        );
+        props.insert(
+            "solo.reaction_prefix".to_string(),
+            MetadataValue::String("Response".to_string()),
+        );
+
+        let cfg = SoloWorldConfig::from_world_meta(&props);
+        assert_eq!(cfg.scene_header.as_deref(), Some("=== Log #{n} ==="));
+        assert_eq!(cfg.scene_normal.as_deref(), Some("All quiet."));
+        assert_eq!(cfg.scene_altered.as_deref(), Some("Something shifted."));
+        assert_eq!(cfg.scene_interrupted.as_deref(), Some("A tremor!"));
+        assert_eq!(cfg.scene_end.as_deref(), Some("Log #{n} sealed."));
+        assert_eq!(cfg.chaos_label.as_deref(), Some("Pressure"));
+        assert_eq!(cfg.event_prefix.as_deref(), Some("The tunnel shifts:"));
+        assert_eq!(cfg.reaction_prefix.as_deref(), Some("Response"));
+    }
+
+    #[test]
+    fn solo_world_config_new_fields_default_none() {
+        let props = HashMap::new();
+        let cfg = SoloWorldConfig::from_world_meta(&props);
+        assert!(cfg.scene_header.is_none());
+        assert!(cfg.scene_normal.is_none());
+        assert!(cfg.scene_altered.is_none());
+        assert!(cfg.scene_interrupted.is_none());
+        assert!(cfg.scene_end.is_none());
+        assert!(cfg.chaos_label.is_none());
+        assert!(cfg.event_prefix.is_none());
+        assert!(cfg.reaction_prefix.is_none());
     }
 }

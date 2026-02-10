@@ -14,6 +14,22 @@ pub enum NarratorTone {
     Humorous,
 }
 
+impl NarratorTone {
+    /// Parse a tone from a string.
+    ///
+    /// Accepts `"formal"`, `"casual"`, `"dramatic"`, `"humorous"` (case-insensitive).
+    /// Returns `None` for unrecognized values.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "formal" => Some(Self::Formal),
+            "casual" => Some(Self::Casual),
+            "dramatic" => Some(Self::Dramatic),
+            "humorous" => Some(Self::Humorous),
+            _ => None,
+        }
+    }
+}
+
 /// Narrative perspective.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Perspective {
@@ -150,5 +166,34 @@ mod tests {
 
         let config = config.with_player_name("Kael");
         assert_eq!(config.player_subject(), "Kael");
+    }
+
+    #[test]
+    fn tone_parse_valid() {
+        assert_eq!(NarratorTone::parse("formal"), Some(NarratorTone::Formal));
+        assert_eq!(NarratorTone::parse("casual"), Some(NarratorTone::Casual));
+        assert_eq!(
+            NarratorTone::parse("dramatic"),
+            Some(NarratorTone::Dramatic)
+        );
+        assert_eq!(
+            NarratorTone::parse("humorous"),
+            Some(NarratorTone::Humorous)
+        );
+    }
+
+    #[test]
+    fn tone_parse_case_insensitive() {
+        assert_eq!(
+            NarratorTone::parse("Dramatic"),
+            Some(NarratorTone::Dramatic)
+        );
+        assert_eq!(NarratorTone::parse("CASUAL"), Some(NarratorTone::Casual));
+    }
+
+    #[test]
+    fn tone_parse_invalid() {
+        assert_eq!(NarratorTone::parse("epic"), None);
+        assert_eq!(NarratorTone::parse(""), None);
     }
 }

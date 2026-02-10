@@ -1,8 +1,12 @@
 //! Interactive fiction session management.
 
+use std::collections::HashMap;
+
 use crate::error::{FictionError, FictionResult};
+use crate::narrator::{NarratorConfig, NarratorTone, Perspective, TemplateRegistry};
 use crate::parser::{Command, Direction, parse_command, resolve_entity};
 use crate::player::PlayerState;
+use ww_core::entity::MetadataValue;
 use ww_core::{EntityId, EntityKind, RelationshipKind, World};
 
 /// An interactive fiction session.
@@ -11,31 +15,69 @@ pub struct FictionSession {
     world: World,
     /// The player's current state.
     player: PlayerState,
+    /// Narrator for tone-aware text generation.
+    narrator: TemplateRegistry,
 }
 
 impl FictionSession {
+    /// Build a `TemplateRegistry` from world meta properties.
+    ///
+    /// Reads `fiction.tone` and `fiction.perspective` from the properties map.
+    fn build_narrator(properties: &HashMap<String, MetadataValue>) -> TemplateRegistry {
+        let tone = extract_string(properties, "fiction.tone")
+            .and_then(|s| NarratorTone::parse(&s))
+            .unwrap_or_default();
+
+        let perspective = extract_string(properties, "fiction.perspective")
+            .map(|s| match s.to_lowercase().as_str() {
+                "third" | "third_person" | "third-person" => Perspective::ThirdPerson,
+                _ => Perspective::SecondPerson,
+            })
+            .unwrap_or_default();
+
+        let config = NarratorConfig::new()
+            .with_tone(tone)
+            .with_perspective(perspective);
+
+        TemplateRegistry::new(config)
+    }
+
     /// Create a new fiction session.
     ///
-    /// The player will be placed at the first location found,
-    /// or returns an error if no locations exist.
+    /// The player will be placed at the location named in `fiction.start`,
+    /// or the first location found if unset.
+    /// The narrator tone is read from `fiction.tone` (default: formal).
     pub fn new(world: World) -> FictionResult<Self> {
-        // Find a starting location
-        let locations = world.entities_by_kind(&EntityKind::Location);
-        let start_location = locations
-            .first()
-            .map(|e| e.id)
-            .ok_or_else(|| FictionError::LocationNotFound("no locations in world".to_string()))?;
+        let narrator = Self::build_narrator(&world.meta.properties);
 
-        // Create a player entity ID (not added to world, just for tracking)
+        // Starting location: use fiction.start if set, else first location
+        let start_location =
+            if let Some(name) = extract_string(&world.meta.properties, "fiction.start") {
+                world
+                    .find_by_name(&name)
+                    .map(|e| e.id)
+                    .ok_or(FictionError::LocationNotFound(name))?
+            } else {
+                let locations = world.entities_by_kind(&EntityKind::Location);
+                locations.first().map(|e| e.id).ok_or_else(|| {
+                    FictionError::LocationNotFound("no locations in world".to_string())
+                })?
+            };
+
         let player_id = EntityId::new();
-
         let player = PlayerState::new(player_id, start_location);
 
-        Ok(Self { world, player })
+        Ok(Self {
+            world,
+            player,
+            narrator,
+        })
     }
 
     /// Create a session with the player at a specific location.
     pub fn at_location(world: World, location_name: &str) -> FictionResult<Self> {
+        let narrator = Self::build_narrator(&world.meta.properties);
+
         let location = world
             .find_by_name(location_name)
             .ok_or_else(|| FictionError::LocationNotFound(location_name.to_string()))?;
@@ -43,7 +85,11 @@ impl FictionSession {
         let player_id = EntityId::new();
         let player = PlayerState::new(player_id, location.id);
 
-        Ok(Self { world, player })
+        Ok(Self {
+            world,
+            player,
+            narrator,
+        })
     }
 
     /// Get the current world.
@@ -102,9 +148,13 @@ impl FictionSession {
 
         if let Some(destination) = exit {
             self.player.location = destination;
-            self.do_look(None)
+            let location = self.world.get_entity(destination).unwrap();
+            let mut output = self.narrator.narrate_arrival(location);
+            output.push_str("\n\n");
+            output.push_str(&self.do_look(None)?);
+            Ok(output)
         } else {
-            Ok(format!("You can't go {} from here.", direction.name()))
+            Ok(self.narrator.narrate_no_exit(direction.name()))
         }
     }
 
@@ -145,14 +195,7 @@ impl FictionSession {
     }
 
     fn describe_location(&self, location: &ww_core::Entity) -> String {
-        let mut output = format!("**{}**\n", location.name);
-
-        if !location.description.is_empty() {
-            output.push_str(&location.description);
-            output.push('\n');
-        }
-
-        // List characters here
+        // Collect characters at this location
         let characters: Vec<_> = self
             .world
             .all_entities()
@@ -170,14 +213,7 @@ impl FictionSession {
             })
             .collect();
 
-        if !characters.is_empty() {
-            output.push('\n');
-            for c in characters {
-                output.push_str(&format!("{} is here.\n", c.name));
-            }
-        }
-
-        // List items here
+        // Collect items at this location
         let items: Vec<_> = self
             .world
             .all_entities()
@@ -193,14 +229,7 @@ impl FictionSession {
             })
             .collect();
 
-        if !items.is_empty() {
-            output.push('\n');
-            for item in items {
-                output.push_str(&format!("You see {} here.\n", item.name));
-            }
-        }
-
-        // List exits
+        // Collect exits
         let exits: Vec<_> = self
             .world
             .relationships_from(location.id)
@@ -209,23 +238,12 @@ impl FictionSession {
             .filter_map(|r| r.label.clone())
             .collect();
 
-        if !exits.is_empty() {
-            output.push_str(&format!("\nExits: {}", exits.join(", ")));
-        }
-
-        output
+        self.narrator
+            .describe_location(location, &characters, &items, &exits)
     }
 
     fn describe_entity(&self, entity: &ww_core::Entity) -> String {
-        let mut output = format!("**{}**\n", entity.name);
-
-        if !entity.description.is_empty() {
-            output.push_str(&entity.description);
-        } else {
-            output.push_str("You see nothing special.");
-        }
-
-        output
+        self.narrator.describe_entity(entity, &self.world)
     }
 
     fn do_take(&mut self, item_name: &str) -> FictionResult<String> {
@@ -236,8 +254,6 @@ impl FictionSession {
         if entity.is_none() || entity.unwrap().kind != EntityKind::Item {
             return Err(FictionError::CannotTake(item_name.to_string()));
         }
-
-        let name = entity.unwrap().name.clone();
 
         // Check if item is at current location
         let at_location = self.world.relationships_from(item_id).iter().any(|r| {
@@ -253,7 +269,8 @@ impl FictionSession {
         }
 
         self.player.add_item(item_id);
-        Ok(format!("You take {}.", name))
+        let entity = self.world.get_entity(item_id).unwrap();
+        Ok(self.narrator.narrate_take(entity))
     }
 
     fn do_drop(&mut self, item_name: &str) -> FictionResult<String> {
@@ -264,14 +281,9 @@ impl FictionSession {
             return Err(FictionError::ItemNotInInventory(item_name.to_string()));
         }
 
-        let name = self
-            .world
-            .get_entity(item_id)
-            .map(|e| e.name.clone())
-            .unwrap_or_else(|| item_name.to_string());
-
         self.player.remove_item(item_id);
-        Ok(format!("You drop {}.", name))
+        let entity = self.world.get_entity(item_id).unwrap();
+        Ok(self.narrator.narrate_drop(entity))
     }
 
     fn do_talk(&self, character_name: &str, topic: Option<&str>) -> FictionResult<String> {
@@ -295,12 +307,15 @@ impl FictionSession {
             };
 
             if let Some(dlg) = dialogue {
-                let mut output = format!("**{}**: {}", character.name, dlg.text);
+                let mut output = self.narrator.format_dialogue(&character.name, &dlg.text);
 
                 if !dlg.choices.is_empty() {
                     output.push('\n');
                     for (i, choice) in dlg.choices.iter().enumerate() {
-                        output.push_str(&format!("\n  [{}] {}", i + 1, choice.text));
+                        output.push_str(&format!(
+                            "\n{}",
+                            self.narrator.format_choice(i, &choice.text)
+                        ));
                     }
                 }
 
@@ -346,6 +361,11 @@ impl FictionSession {
         Ok(output)
     }
 
+    /// Get the narrator's template registry.
+    pub fn narrator(&self) -> &TemplateRegistry {
+        &self.narrator
+    }
+
     fn do_help(&self, topic: Option<&str>) -> FictionResult<String> {
         if let Some(t) = topic {
             match t.to_lowercase().as_str() {
@@ -384,6 +404,14 @@ impl FictionSession {
                 Type 'help <topic>' for more details."
                 .to_string())
         }
+    }
+}
+
+/// Extract an optional string value from a properties map.
+fn extract_string(properties: &HashMap<String, MetadataValue>, key: &str) -> Option<String> {
+    match properties.get(key) {
+        Some(MetadataValue::String(s)) => Some(s.clone()),
+        _ => None,
     }
 }
 
@@ -478,7 +506,7 @@ mod tests {
         let mut session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
 
         let output = session.do_move(Direction::North).unwrap();
-        assert!(output.contains("can't go north"));
+        assert!(output.contains("cannot go north"));
     }
 
     #[test]
@@ -582,5 +610,92 @@ mod tests {
 
         let output = session.do_talk("Old Tom", None).unwrap();
         assert!(output.contains("nothing to say"));
+    }
+
+    // --- Fiction config tests ---
+
+    #[test]
+    fn fiction_config_loads_tone() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.tone".to_string(),
+            MetadataValue::String("dramatic".to_string()),
+        );
+        let mut session = FictionSession::new(world).unwrap();
+        // Dramatic tone uses "set foot upon" for arrival
+        let output = session.process("look").unwrap();
+        assert!(output.contains("Rusty Tankard"));
+    }
+
+    #[test]
+    fn fiction_config_loads_start() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.start".to_string(),
+            MetadataValue::String("Market Street".to_string()),
+        );
+        let session = FictionSession::new(world).unwrap();
+        let output = session.do_look(None).unwrap();
+        assert!(output.contains("Market Street"));
+    }
+
+    #[test]
+    fn fiction_default_start() {
+        // Without fiction.start, uses first location
+        let world = test_world();
+        let session = FictionSession::new(world).unwrap();
+        let output = session.do_look(None).unwrap();
+        assert!(output.contains("Rusty Tankard"));
+    }
+
+    #[test]
+    fn fiction_start_not_found() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.start".to_string(),
+            MetadataValue::String("Nonexistent Place".to_string()),
+        );
+        let result = FictionSession::new(world);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn narrator_used_for_look() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.tone".to_string(),
+            MetadataValue::String("dramatic".to_string()),
+        );
+        let session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let output = session.do_look(None).unwrap();
+        // Dramatic tone: character line uses "stands before"
+        assert!(output.contains("stands before"));
+    }
+
+    #[test]
+    fn narrator_used_for_move() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.tone".to_string(),
+            MetadataValue::String("dramatic".to_string()),
+        );
+        let mut session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let output = session.do_move(Direction::East).unwrap();
+        // Dramatic arrival: "set foot upon"
+        assert!(output.contains("set foot upon"));
+        assert!(output.contains("Market Street"));
+    }
+
+    #[test]
+    fn narrator_used_for_no_exit() {
+        let mut world = test_world();
+        world.meta.properties.insert(
+            "fiction.tone".to_string(),
+            MetadataValue::String("humorous".to_string()),
+        );
+        let mut session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let output = session.do_move(Direction::North).unwrap();
+        // Humorous no-exit: "walk north into a wall"
+        assert!(output.contains("wall"));
     }
 }
