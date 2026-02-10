@@ -351,4 +351,122 @@ mod tests {
         assert_eq!("[6]Sheet".len(), 8);
         assert_eq!("[7]Dice".len(), 7);
     }
+
+    #[test]
+    fn tab_bar_hit_test_all_first_chars() {
+        // Test clicking on the first character of each tab (the '[')
+        assert_eq!(tab_bar_hit_test(0), Some(TabId::Explorer)); // '[' of Explorer
+        assert_eq!(tab_bar_hit_test(14), Some(TabId::Graph)); // '[' of Graph
+        assert_eq!(tab_bar_hit_test(25), Some(TabId::Timeline)); // '[' of Timeline
+        assert_eq!(tab_bar_hit_test(39), Some(TabId::Play)); // '[' of Play
+        assert_eq!(tab_bar_hit_test(49), Some(TabId::Solo)); // '[' of Solo
+        assert_eq!(tab_bar_hit_test(59), Some(TabId::Sheet)); // '[' of Sheet
+        assert_eq!(tab_bar_hit_test(70), Some(TabId::Dice)); // '[' of Dice
+    }
+
+    #[test]
+    fn tab_bar_hit_test_all_last_chars() {
+        // Test clicking on the last character of each tab label (before divider)
+        assert_eq!(tab_bar_hit_test(10), Some(TabId::Explorer)); // 'r' of Explorer
+        assert_eq!(tab_bar_hit_test(21), Some(TabId::Graph)); // 'h' of Graph
+        assert_eq!(tab_bar_hit_test(35), Some(TabId::Timeline)); // 'e' of Timeline
+        assert_eq!(tab_bar_hit_test(45), Some(TabId::Play)); // 'y' of Play
+        assert_eq!(tab_bar_hit_test(55), Some(TabId::Solo)); // 'o' of Solo
+        assert_eq!(tab_bar_hit_test(66), Some(TabId::Sheet)); // 't' of Sheet
+        assert_eq!(tab_bar_hit_test(76), Some(TabId::Dice)); // 'e' of Dice
+    }
+
+    #[test]
+    fn tab_bar_hit_test_exact_boundaries() {
+        // Test the exact start and end boundaries of each tab's clickable area
+        // Explorer: [0, 14)
+        assert_eq!(tab_bar_hit_test(0), Some(TabId::Explorer));
+        assert_eq!(tab_bar_hit_test(13), Some(TabId::Explorer));
+        assert_eq!(tab_bar_hit_test(14), Some(TabId::Graph)); // boundary
+
+        // Graph: [14, 25)
+        assert_eq!(tab_bar_hit_test(14), Some(TabId::Graph));
+        assert_eq!(tab_bar_hit_test(24), Some(TabId::Graph));
+        assert_eq!(tab_bar_hit_test(25), Some(TabId::Timeline)); // boundary
+
+        // Timeline: [25, 39)
+        assert_eq!(tab_bar_hit_test(25), Some(TabId::Timeline));
+        assert_eq!(tab_bar_hit_test(38), Some(TabId::Timeline));
+        assert_eq!(tab_bar_hit_test(39), Some(TabId::Play)); // boundary
+
+        // Play: [39, 49)
+        assert_eq!(tab_bar_hit_test(39), Some(TabId::Play));
+        assert_eq!(tab_bar_hit_test(48), Some(TabId::Play));
+        assert_eq!(tab_bar_hit_test(49), Some(TabId::Solo)); // boundary
+
+        // Solo: [49, 59)
+        assert_eq!(tab_bar_hit_test(49), Some(TabId::Solo));
+        assert_eq!(tab_bar_hit_test(58), Some(TabId::Solo));
+        assert_eq!(tab_bar_hit_test(59), Some(TabId::Sheet)); // boundary
+
+        // Sheet: [59, 70)
+        assert_eq!(tab_bar_hit_test(59), Some(TabId::Sheet));
+        assert_eq!(tab_bar_hit_test(69), Some(TabId::Sheet));
+        assert_eq!(tab_bar_hit_test(70), Some(TabId::Dice)); // boundary
+
+        // Dice: [70, 77)
+        assert_eq!(tab_bar_hit_test(70), Some(TabId::Dice));
+        assert_eq!(tab_bar_hit_test(76), Some(TabId::Dice));
+        assert_eq!(tab_bar_hit_test(77), None); // beyond
+    }
+
+    #[test]
+    fn tab_bar_hit_test_number_positions() {
+        // Test clicking on the number digit of each tab
+        assert_eq!(tab_bar_hit_test(1), Some(TabId::Explorer)); // '1'
+        assert_eq!(tab_bar_hit_test(15), Some(TabId::Graph)); // '2'
+        assert_eq!(tab_bar_hit_test(26), Some(TabId::Timeline)); // '3'
+        assert_eq!(tab_bar_hit_test(40), Some(TabId::Play)); // '4'
+        assert_eq!(tab_bar_hit_test(50), Some(TabId::Solo)); // '5'
+        assert_eq!(tab_bar_hit_test(60), Some(TabId::Sheet)); // '6'
+        assert_eq!(tab_bar_hit_test(71), Some(TabId::Dice)); // '7'
+    }
+
+    #[test]
+    fn tab_bar_hit_test_no_gaps() {
+        // Verify there are no gaps - every column from 0 to 76 should hit a tab
+        for col in 0..=76 {
+            assert!(
+                tab_bar_hit_test(col).is_some(),
+                "Column {col} should hit a tab, but returned None"
+            );
+        }
+    }
+
+    #[test]
+    fn tab_bar_hit_test_sequential() {
+        // Verify tabs are selected in correct order as we scan left to right
+        let mut last_tab_index = None;
+        for col in 0..=76 {
+            if let Some(tab) = tab_bar_hit_test(col) {
+                let tab_index = tab.index();
+                if let Some(last_index) = last_tab_index {
+                    // Tab index should either stay the same or increment by 1
+                    assert!(
+                        tab_index == last_index || tab_index == last_index + 1,
+                        "Tab order violation at col {col}: jumped from tab {last_index} to {tab_index}"
+                    );
+                }
+                last_tab_index = Some(tab_index);
+            }
+        }
+    }
+
+    #[test]
+    fn tab_bar_hit_test_realistic_click_positions() {
+        // Test realistic positions where users might click on each tab
+        // (roughly the visual center of each label)
+        assert_eq!(tab_bar_hit_test(6), Some(TabId::Explorer)); // "plorer"
+        assert_eq!(tab_bar_hit_test(18), Some(TabId::Graph)); // "raph"
+        assert_eq!(tab_bar_hit_test(31), Some(TabId::Timeline)); // "meline"
+        assert_eq!(tab_bar_hit_test(43), Some(TabId::Play)); // "lay"
+        assert_eq!(tab_bar_hit_test(53), Some(TabId::Solo)); // "lo"
+        assert_eq!(tab_bar_hit_test(64), Some(TabId::Sheet)); // "heet"
+        assert_eq!(tab_bar_hit_test(74), Some(TabId::Dice)); // "ce"
+    }
 }
