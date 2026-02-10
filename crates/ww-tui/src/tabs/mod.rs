@@ -106,6 +106,10 @@ pub trait Tab {
 
 /// Draw the tab bar.
 pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
+    // First, clear the entire area with a black background block
+    let clear_block = ratatui::widgets::Block::default().style(Style::default().bg(Color::Black));
+    frame.render_widget(clear_block, area);
+
     let titles = [
         "[1]Explorer",
         "[2]Graph",
@@ -146,7 +150,7 @@ pub fn draw_tab_bar(frame: &mut Frame, active: TabId, area: Rect) {
     if padding_len > 0 {
         spans.push(Span::styled(
             " ".repeat(padding_len),
-            Style::default().bg(Color::Black),
+            Style::default().fg(Color::Black).bg(Color::Black),
         ));
     }
 
