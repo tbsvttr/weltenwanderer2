@@ -21,7 +21,7 @@
 - [x] Commands: init, build, check, list, show, search, graph, timeline, export, new
 - [x] ratatui TUI with entity list, detail, graph, timeline views
 - [x] CLI command integration tests (10 commands, 28 tests)
-- [ ] TUI app state and navigation tests
+- [x] TUI app state and navigation tests (moved to ww-tui crate)
 - [ ] Typed error enum instead of `Result<(), String>`
 - [ ] `ww watch` — rebuild on file changes
 - [ ] `ww diff` — compare two world states
@@ -119,7 +119,7 @@
 
 ## M8: Terminal UI (Unified)
 
-- [x] `ww-tui` crate (ratatui 0.29, crossterm 0.28, standalone binary)
+- [x] `ww-tui` crate (ratatui 0.29, crossterm 0.28, standalone binary, 37 tests)
 - [x] Tab trait with InputMode (VimNav vs TextInput) for unified event routing
 - [x] Explorer tab (entity list/detail, search, vim-like navigation)
 - [x] Graph tab (ASCII relationship view, scrollable)
@@ -150,4 +150,6 @@
   - [x] `panic` command — d20 vs Stress with auto-increment
   - [x] `encounter <creature>` command — display creature stats from world
   - [x] Unified TUI with tab bar, action buttons, tab completion, track gauges
+  - [x] Comprehensive test coverage for TUI mouse/keyboard interaction (37 tests for explorer tab)
+  - **TEL Compatibility Note**: Mothership 1e mechanics fully supported. Oracle is adapted (action/subject tables vs TEL's original Semiotic Standard d50 visual symbols). Chaos/pressure/scene system is an added feature for extended solo play, not present in original TEL workflow (Observe, Resolve, Act, Conclude, Leave Evidence).
   - [ ] Save/load session state for fiction and solo screens
