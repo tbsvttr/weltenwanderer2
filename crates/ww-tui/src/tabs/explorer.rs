@@ -230,6 +230,7 @@ impl Tab for ExplorerTab {
                                 if let Some(&id) = self.filtered_ids.get(self.list_cursor) {
                                     self.detail_entity_id = Some(id);
                                     self.detail_scroll = 0;
+                                    self.view_stack.push(self.sub_view);
                                     self.sub_view = SubView::Detail;
                                 }
                             } else {
