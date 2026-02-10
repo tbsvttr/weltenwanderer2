@@ -183,8 +183,8 @@ fn handle_mouse(app: &mut TuiApp, mouse: crossterm::event::MouseEvent) {
 /// Hit-test the tab bar for mouse clicks.
 fn tab_bar_hit_test(col: u16) -> Option<TabId> {
     // Tab labels with dividers: "[1]Explorer | [2]Graph | [3]Timeline | [4]Play | [5]Solo | [6]Sheet | [7]Dice"
-    // The ratatui Tabs widget renders these sequentially with the divider between them.
-    // We need to account for the exact rendering including dividers.
+    // For better UX, make each tab's clickable area include the divider space after it.
+    // This makes clicking more forgiving and prevents dead zones.
 
     let labels = [
         "[1]Explorer",
@@ -201,20 +201,34 @@ fn tab_bar_hit_test(col: u16) -> Option<TabId> {
     let mut x = 0u16;
     for (i, label) in labels.iter().enumerate() {
         let label_len = label.len() as u16;
-        let end_x = x + label_len;
+        // Include divider in this tab's clickable area (except for last tab)
+        let clickable_width = if i < labels.len() - 1 {
+            label_len + divider_len
+        } else {
+            label_len
+        };
+        let end_x = x + clickable_width;
 
-        // Check if click is within this tab's label area
+        // Debug logging (compile out in release builds)
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "DEBUG: Tab {}: '{}' range [{}, {}), checking col {}",
+            i, label, x, end_x, col
+        );
+
+        // Check if click is within this tab's clickable area (label + divider)
         if col >= x && col < end_x {
+            #[cfg(debug_assertions)]
+            eprintln!("DEBUG: Hit! Returning tab {}", i);
             return Some(TabId::ALL[i]);
         }
 
-        // Move past the label and divider (except for last tab)
+        // Move to next tab position
         x = end_x;
-        if i < labels.len() - 1 {
-            x += divider_len;
-        }
     }
 
+    #[cfg(debug_assertions)]
+    eprintln!("DEBUG: No hit for col {}", col);
     None
 }
 
@@ -243,5 +257,98 @@ fn draw(frame: &mut Frame, app: &mut TuiApp) {
     // Help popup overlay
     if app.show_help {
         crate::shared::draw_help_popup(frame);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tab_bar_hit_test_boundaries() {
+        // Tab layout: "[1]Explorer | [2]Graph | [3]Timeline | [4]Play | [5]Solo | [6]Sheet | [7]Dice"
+        // Lengths: 11, 8, 11, 7, 7, 8, 7
+        // Divider: " | " (3 chars) - included in each tab's clickable area
+        // Clickable areas: Tab includes label + divider (except last tab)
+
+        // Tab 0: Explorer (cols 0-13, 11 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(0), Some(TabId::Explorer));
+        assert_eq!(tab_bar_hit_test(5), Some(TabId::Explorer));
+        assert_eq!(tab_bar_hit_test(10), Some(TabId::Explorer));
+        assert_eq!(tab_bar_hit_test(11), Some(TabId::Explorer)); // divider is part of Explorer
+        assert_eq!(tab_bar_hit_test(13), Some(TabId::Explorer));
+
+        // Tab 1: Graph (cols 14-24, 8 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(14), Some(TabId::Graph));
+        assert_eq!(tab_bar_hit_test(18), Some(TabId::Graph));
+        assert_eq!(tab_bar_hit_test(21), Some(TabId::Graph));
+        assert_eq!(tab_bar_hit_test(24), Some(TabId::Graph)); // divider is part of Graph
+
+        // Tab 2: Timeline (cols 25-38, 11 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(25), Some(TabId::Timeline));
+        assert_eq!(tab_bar_hit_test(30), Some(TabId::Timeline));
+        assert_eq!(tab_bar_hit_test(35), Some(TabId::Timeline));
+        assert_eq!(tab_bar_hit_test(38), Some(TabId::Timeline)); // divider is part of Timeline
+
+        // Tab 3: Play (cols 39-48, 7 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(39), Some(TabId::Play));
+        assert_eq!(tab_bar_hit_test(42), Some(TabId::Play));
+        assert_eq!(tab_bar_hit_test(45), Some(TabId::Play));
+        assert_eq!(tab_bar_hit_test(48), Some(TabId::Play)); // divider is part of Play
+
+        // Tab 4: Solo (cols 49-58, 7 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(49), Some(TabId::Solo));
+        assert_eq!(tab_bar_hit_test(52), Some(TabId::Solo));
+        assert_eq!(tab_bar_hit_test(55), Some(TabId::Solo));
+        assert_eq!(tab_bar_hit_test(58), Some(TabId::Solo)); // divider is part of Solo
+
+        // Tab 5: Sheet (cols 59-69, 8 chars + 3 divider)
+        assert_eq!(tab_bar_hit_test(59), Some(TabId::Sheet));
+        assert_eq!(tab_bar_hit_test(63), Some(TabId::Sheet));
+        assert_eq!(tab_bar_hit_test(66), Some(TabId::Sheet));
+        assert_eq!(tab_bar_hit_test(69), Some(TabId::Sheet)); // divider is part of Sheet
+
+        // Tab 6: Dice (cols 70-76, 7 chars, no divider after)
+        assert_eq!(tab_bar_hit_test(70), Some(TabId::Dice));
+        assert_eq!(tab_bar_hit_test(73), Some(TabId::Dice));
+        assert_eq!(tab_bar_hit_test(76), Some(TabId::Dice));
+
+        // Beyond all tabs
+        assert_eq!(tab_bar_hit_test(100), None);
+    }
+
+    #[test]
+    fn tab_bar_hit_test_each_tab() {
+        // Test clicking in the middle of each tab label
+        assert_eq!(tab_bar_hit_test(5), Some(TabId::Explorer)); // middle of Explorer
+        assert_eq!(tab_bar_hit_test(18), Some(TabId::Graph)); // middle of Graph
+        assert_eq!(tab_bar_hit_test(30), Some(TabId::Timeline)); // middle of Timeline
+        assert_eq!(tab_bar_hit_test(42), Some(TabId::Play)); // middle of Play
+        assert_eq!(tab_bar_hit_test(52), Some(TabId::Solo)); // middle of Solo
+        assert_eq!(tab_bar_hit_test(63), Some(TabId::Sheet)); // middle of Sheet
+        assert_eq!(tab_bar_hit_test(73), Some(TabId::Dice)); // middle of Dice
+    }
+
+    #[test]
+    fn tab_bar_hit_test_dividers_part_of_tabs() {
+        // Test that clicking on dividers now selects the tab before them (for better UX)
+        assert_eq!(tab_bar_hit_test(11), Some(TabId::Explorer)); // divider after Explorer
+        assert_eq!(tab_bar_hit_test(22), Some(TabId::Graph)); // divider after Graph
+        assert_eq!(tab_bar_hit_test(36), Some(TabId::Timeline)); // divider after Timeline
+        assert_eq!(tab_bar_hit_test(46), Some(TabId::Play)); // divider after Play
+        assert_eq!(tab_bar_hit_test(56), Some(TabId::Solo)); // divider after Solo
+        assert_eq!(tab_bar_hit_test(67), Some(TabId::Sheet)); // divider after Sheet
+    }
+
+    #[test]
+    fn tab_bar_lengths_match_actual_strings() {
+        // Verify our assumptions about string lengths
+        assert_eq!("[1]Explorer".len(), 11);
+        assert_eq!("[2]Graph".len(), 8);
+        assert_eq!("[3]Timeline".len(), 11);
+        assert_eq!("[4]Play".len(), 7);
+        assert_eq!("[5]Solo".len(), 7);
+        assert_eq!("[6]Sheet".len(), 8);
+        assert_eq!("[7]Dice".len(), 7);
     }
 }
