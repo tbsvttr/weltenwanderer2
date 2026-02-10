@@ -41,8 +41,8 @@ Three example worlds are included:
 - **stellar-drift/**: Sci-fi setting with custom entity kinds
 - **thausand-empty-light/**: *A Thousand Empty Light* solo horror module for Mothership 1e
   - Fully configured Mothership mechanics (d100 roll-under, Stress/Health/Wounds tracks)
-  - Solo session with custom oracle tables (20 actions × 20 subjects), scene management, and pressure tracking
-  - Note: Oracle is adapted from TEL's original Semiotic Standard (d50 visual symbols). The chaos/pressure system is an added feature for extended solo play not present in the original module.
+  - Authentic Semiotic Standard oracle (50 visual symbols) matching TEL's original design
+  - Chaos/scene management disabled to preserve TEL's ORACLE workflow (Observe, Resolve, Act, Conclude, Leave Evidence)
 
 ## The DSL
 

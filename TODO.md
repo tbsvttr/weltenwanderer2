@@ -151,5 +151,5 @@
   - [x] `encounter <creature>` command — display creature stats from world
   - [x] Unified TUI with tab bar, action buttons, tab completion, track gauges
   - [x] Comprehensive test coverage for TUI mouse/keyboard interaction (37 tests for explorer tab)
-  - **TEL Compatibility Note**: Mothership 1e mechanics fully supported. Oracle is adapted (action/subject tables vs TEL's original Semiotic Standard d50 visual symbols). Chaos/pressure/scene system is an added feature for extended solo play, not present in original TEL workflow (Observe, Resolve, Act, Conclude, Leave Evidence).
+  - **TEL Compatibility Note**: Mothership 1e mechanics fully supported ✅. Authentic Semiotic Standard oracle (50 symbols) ✅. Chaos/scene system disabled to match TEL's original ORACLE workflow ✅.
   - [ ] Save/load session state for fiction and solo screens
