@@ -199,7 +199,7 @@ impl Tab for ExplorerTab {
     }
 
     fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) {
-        use crossterm::event::MouseEventKind;
+        use crossterm::event::{MouseButton, MouseEventKind};
 
         match mouse.kind {
             MouseEventKind::ScrollUp => match self.sub_view {
@@ -216,6 +216,30 @@ impl Tab for ExplorerTab {
                     self.detail_scroll = self.detail_scroll.saturating_add(1);
                 }
             },
+            MouseEventKind::Down(MouseButton::Left) => {
+                // Handle clicks in list view to select entities
+                if self.sub_view == SubView::List {
+                    // Row 0 is tab bar, row 1+ is content
+                    // Account for block border (1 row at top) and title
+                    if mouse.row >= 3 {
+                        let clicked_row = mouse.row - 3;
+                        let target_idx = clicked_row as usize;
+                        if target_idx < self.filtered_ids.len() {
+                            if target_idx == self.list_cursor {
+                                // Double-click effect: open detail view
+                                if let Some(&id) = self.filtered_ids.get(self.list_cursor) {
+                                    self.detail_entity_id = Some(id);
+                                    self.detail_scroll = 0;
+                                    self.sub_view = SubView::Detail;
+                                }
+                            } else {
+                                // Single click: select entity
+                                self.list_cursor = target_idx;
+                            }
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }
