@@ -327,9 +327,13 @@ impl Tab for SoloTab {
             MouseEventKind::Down(MouseButton::Left) => {
                 // Action bar hit testing (approximate: action bar at rows 1-2 in tab content area)
                 let action_area = Rect::new(0, 0, 80, 2);
-                if let Some(cmd) =
-                    views::actions::hit_test(mouse.column, mouse.row.saturating_sub(1), action_area)
-                {
+                let chaos = self.session.world_config().enable_chaos;
+                if let Some(cmd) = views::actions::hit_test(
+                    mouse.column,
+                    mouse.row.saturating_sub(1),
+                    action_area,
+                    chaos,
+                ) {
                     if cmd.ends_with(' ') {
                         self.prefill_input(cmd);
                     } else {
@@ -355,7 +359,8 @@ impl Tab for SoloTab {
             .split(area);
 
         // Action bar
-        views::actions::draw(frame, chunks[0]);
+        let chaos = self.session.world_config().enable_chaos;
+        views::actions::draw(frame, chunks[0], chaos);
 
         // Main content: output (65%) + sidebar (35%)
         let content = Layout::default()

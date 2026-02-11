@@ -73,11 +73,11 @@
 
 ## M5: Interactive Fiction Engine
 
-- [x] `ww-fiction` crate (68 tests)
+- [x] `ww-fiction` crate (72 tests)
 - [x] Natural language parser for player input (verb synonyms, fuzzy matching)
 - [x] Choice engine (Dialogue, Choice, Condition, Effect, ChoiceState)
 - [x] Narrator system (4 tones, 2 perspectives, template registry)
-- [x] `FictionSession` — interactive game loop with movement, inventory, talk
+- [x] `FictionSession` — interactive game loop with movement, inventory, location-proximate talk
 - [x] `FictionSystem` — simulation plugin for narrative generation
 - [x] `ww play` CLI command
 - [x] DSL `dialogue` / `choice` block syntax with conditions, effects, goto
@@ -152,4 +152,16 @@
   - [x] Unified TUI with tab bar, action buttons, tab completion, track gauges
   - [x] Comprehensive test coverage for TUI mouse/keyboard interaction (37 tests for explorer tab)
   - **TEL Compatibility Note**: Mothership 1e mechanics fully supported ✅. Authentic Semiotic Standard oracle (50 symbols) ✅. Chaos/scene system disabled to match TEL's original ORACLE workflow ✅.
+  - [x] UX improvements for TEL playability:
+    - [x] Add "Type 'look' to begin" to intro text
+    - [x] Add MemoComm access hints to location descriptions
+    - [x] Add power relay objectives to section descriptions
+  - [x] Location-proximate `talk` command (entities must be at player's location)
+    - [x] `EntityNotHere` error: "Quinn Sut is not here." vs "entity not found"
+    - [x] Any entity with dialogues is talkable (items, custom types, not just characters)
+    - [x] MemoComm items per section with Quinn's recordings (discovered as you explore)
+    - [x] Quinn's in-person encounter in Section 5
+    - [x] Scene/EndScn buttons hidden in TUI when chaos disabled
+    - [x] Scene commands filtered from tab completions when chaos disabled
+    - [x] `talk` and `examine` added to solo tab completions
   - [ ] Save/load session state for fiction and solo screens

@@ -24,14 +24,14 @@ Run `ww --help` for all commands and options.
   - Graph: ASCII relationship visualization
   - Timeline: Chronological event browser
   - Play: Interactive fiction session with natural language parser
-  - Solo: Solo TTRPG runner with Mythic GME-inspired oracle, scene management, and mechanics integration
+  - Solo: Solo TTRPG runner with Mythic GME-inspired oracle, optional scene management, and mechanics integration
   - Sheet: Character sheet viewer with attributes, skills, and tracks
   - Dice: Visual dice roller with customizable pools
 - **Game Mechanics**: DSL-configurable TTRPG systems with dice, resolution strategies, character sheets, and combat
   - Presets: 2d20 (Modiphius), Trophy Gold, Blood & Honor, Mothership (d100 roll-under)
 - **World Simulation**: Tick-based NPC schedules, needs, and spatial movement
 - **Language Server**: Full LSP support with diagnostics, completion, go-to-definition, rename, and find references
-- **Interactive Fiction**: Natural language parser, dialogue trees, narrator with configurable tone
+- **Interactive Fiction**: Natural language parser, dialogue trees, location-proximate talk, narrator with configurable tone
 
 ### Example Worlds
 
@@ -43,6 +43,7 @@ Three example worlds are included:
   - Fully configured Mothership mechanics (d100 roll-under, Stress/Health/Wounds tracks)
   - Authentic Semiotic Standard oracle (50 visual symbols) matching TEL's original design
   - Chaos/scene management disabled to preserve TEL's ORACLE workflow (Observe, Resolve, Act, Conclude, Leave Evidence)
+  - MemoComm recordings discovered per section as you descend (location-proximate talk)
 
 ## The DSL
 

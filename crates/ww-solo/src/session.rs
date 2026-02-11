@@ -179,12 +179,10 @@ impl SoloSession {
         let trimmed = input.trim_start();
 
         // Top-level command list (used for empty input and prefix matching)
-        let commands: &[&str] = &[
+        let mut commands: Vec<&str> = vec![
             "ask ",
             "reaction ",
             "event",
-            "scene ",
-            "end scene ",
             "check ",
             "roll ",
             "panic",
@@ -203,8 +201,15 @@ impl SoloSession {
             "npc remove ",
             "help",
             "look",
+            "examine ",
             "go ",
+            "talk ",
         ];
+
+        if self.world_config.enable_chaos {
+            commands.push("scene ");
+            commands.push("end scene ");
+        }
 
         if trimmed.is_empty() {
             return commands.iter().map(|c| c.to_string()).collect();

@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::error::{FictionError, FictionResult};
 use crate::narrator::{NarratorConfig, NarratorTone, Perspective, TemplateRegistry};
-use crate::parser::{Command, Direction, parse_command, resolve_entity};
+use crate::parser::{
+    Command, Direction, parse_command, resolve_entity, resolve_entity_at_location,
+};
 use crate::player::PlayerState;
 use ww_core::entity::MetadataValue;
 use ww_core::{EntityId, EntityKind, RelationshipKind, World};
@@ -286,19 +288,22 @@ impl FictionSession {
         Ok(self.narrator.narrate_drop(entity))
     }
 
-    fn do_talk(&self, character_name: &str, topic: Option<&str>) -> FictionResult<String> {
-        let char_id = resolve_entity(&self.world, character_name)
-            .ok_or_else(|| FictionError::EntityNotFound(character_name.to_string()))?;
+    fn do_talk(&self, entity_name: &str, topic: Option<&str>) -> FictionResult<String> {
+        // Resolve entity at current location (strict proximity)
+        let entity_id = if let Some(id) =
+            resolve_entity_at_location(&self.world, entity_name, self.player.location)
+        {
+            id
+        } else if resolve_entity(&self.world, entity_name).is_some() {
+            return Err(FictionError::EntityNotHere(entity_name.to_string()));
+        } else {
+            return Err(FictionError::EntityNotFound(entity_name.to_string()));
+        };
 
-        let entity = self.world.get_entity(char_id);
-        if entity.is_none() || entity.unwrap().kind != EntityKind::Character {
-            return Err(FictionError::EntityNotFound(character_name.to_string()));
-        }
+        let entity = self.world.get_entity(entity_id).unwrap();
 
-        let character = entity.unwrap();
-
-        // Check for DSL-defined dialogues
-        if let Some(fiction) = &character.components.fiction {
+        // Check for DSL-defined dialogues (works for any entity kind)
+        if let Some(fiction) = &entity.components.fiction {
             // Find matching dialogue by topic or use first available
             let dialogue = if let Some(t) = topic {
                 fiction.dialogues.iter().find(|d| d.id == t)
@@ -307,7 +312,7 @@ impl FictionSession {
             };
 
             if let Some(dlg) = dialogue {
-                let mut output = self.narrator.format_dialogue(&character.name, &dlg.text);
+                let mut output = self.narrator.format_dialogue(&entity.name, &dlg.text);
 
                 if !dlg.choices.is_empty() {
                     output.push('\n');
@@ -323,7 +328,7 @@ impl FictionSession {
             }
         }
 
-        Ok(format!("{} has nothing to say.", character.name))
+        Ok(format!("{} has nothing to say.", entity.name))
     }
 
     fn do_use(&self, item_name: &str, target: Option<&str>) -> FictionResult<String> {
@@ -384,8 +389,9 @@ impl FictionSession {
                     inventory (or i) - list what you're carrying"
                     .to_string()),
                 "talk" | "dialogue" => Ok("**Talking**\n\
-                    talk to <character> - start a conversation\n\
-                    ask <character> about <topic> - ask about something specific"
+                    talk to <entity> - interact with someone or something nearby\n\
+                    ask <entity> about <topic> - ask about a specific topic\n\
+                    Note: the entity must be at your current location."
                     .to_string()),
                 _ => Ok(format!("No help available for '{}'.", t)),
             }
@@ -397,7 +403,7 @@ impl FictionSession {
                 take <item> - pick up an item\n\
                 drop <item> - drop an item\n\
                 inventory (or i) - list what you're carrying\n\
-                talk to <character> - start a conversation\n\
+                talk to <entity> - interact with someone or something nearby\n\
                 use <item> [on <target>] - use an item\n\
                 help [topic] - show help\n\
                 quit - exit the game\n\n\
@@ -610,6 +616,98 @@ mod tests {
 
         let output = session.do_talk("Old Tom", None).unwrap();
         assert!(output.contains("nothing to say"));
+    }
+
+    #[test]
+    fn talk_character_not_at_location() {
+        let mut world = test_world();
+        let street_id = world.find_id_by_name("Market Street").unwrap();
+        let thief = Entity::new(EntityKind::Character, "Sly Pete");
+        let thief_id = world.add_entity(thief).unwrap();
+        world
+            .add_relationship(Relationship::new(
+                thief_id,
+                RelationshipKind::LocatedAt,
+                street_id,
+            ))
+            .unwrap();
+
+        // Player is at the tavern, Sly Pete is at Market Street
+        let session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let result = session.do_talk("Sly Pete", None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not here"));
+    }
+
+    #[test]
+    fn talk_entity_not_found() {
+        let world = test_world();
+        let session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let result = session.do_talk("Nonexistent Person", None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn talk_item_with_dialogue() {
+        use ww_core::component::{DialogueData, FictionComponent};
+
+        let mut world = test_world();
+        let tavern_id = world.find_id_by_name("the Rusty Tankard").unwrap();
+
+        let mut memocomm = Entity::new(EntityKind::Item, "MemoComm");
+        memocomm.components.fiction = Some(FictionComponent {
+            dialogues: vec![DialogueData {
+                id: "recording".to_string(),
+                text: "PLAYBACK: Hello from the past.".to_string(),
+                conditions: vec![],
+                choices: vec![],
+            }],
+        });
+        let memocomm_id = world.add_entity(memocomm).unwrap();
+        world
+            .add_relationship(Relationship::new(
+                memocomm_id,
+                RelationshipKind::LocatedAt,
+                tavern_id,
+            ))
+            .unwrap();
+
+        let session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let output = session.do_talk("MemoComm", None).unwrap();
+        assert!(output.contains("PLAYBACK"));
+    }
+
+    #[test]
+    fn talk_item_not_at_location() {
+        use ww_core::component::{DialogueData, FictionComponent};
+
+        let mut world = test_world();
+        let street_id = world.find_id_by_name("Market Street").unwrap();
+
+        let mut device = Entity::new(EntityKind::Item, "Terminal");
+        device.components.fiction = Some(FictionComponent {
+            dialogues: vec![DialogueData {
+                id: "boot".to_string(),
+                text: "System online.".to_string(),
+                conditions: vec![],
+                choices: vec![],
+            }],
+        });
+        let device_id = world.add_entity(device).unwrap();
+        world
+            .add_relationship(Relationship::new(
+                device_id,
+                RelationshipKind::LocatedAt,
+                street_id,
+            ))
+            .unwrap();
+
+        // Player is at the tavern, Terminal is at Market Street
+        let session = FictionSession::at_location(world, "the Rusty Tankard").unwrap();
+        let result = session.do_talk("Terminal", None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not here"));
     }
 
     // --- Fiction config tests ---

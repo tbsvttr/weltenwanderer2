@@ -17,6 +17,10 @@ pub enum FictionError {
     #[error("entity not found: {0}")]
     EntityNotFound(String),
 
+    /// Entity exists in the world but is not at the player's location.
+    #[error("{0} is not here.")]
+    EntityNotHere(String),
+
     /// Location not found or invalid.
     #[error("location not found: {0}")]
     LocationNotFound(String),
